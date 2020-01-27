@@ -57,33 +57,26 @@ class html_page:
         # 属性存在        soup.select('a[data])
         # class検索        soup.select('a.first')
         # ====================================================================================================
-        select_element_list = self.soup.select(selector)
-
-
-
+        return element_list( self, self.soup.select(selector) )
 
 class element_list:
 
-    def __init__(self, bs_element):
+    def __init__(self, page, bs_element_list):
 
+        self.element_list = list()
+        if bs_element_list != None :
+            for bs_element in bs_element_list:
+                self.element_list.append( self.__create_element( page, bs_element ) )
 
-        if select_element_list != None :
-            if len( select_element_list ) == 1:
-                return self.__create_element(self, select_element_list[0])
-            else:
-                element_list = list()
-                for bs_element in select_element_list:
-                    element_list.append(self.__create_element(self, bs_element))
-                return element_list
-        else:
-            return None
+    def roop(self, func):
+        for element in self.element_list:
+            func(element)
 
     def __create_element(self, page, bs_element):
         if bs_element.name == "a":
-            return anchor_element(page, bs_element)
+            return anchor_html_element(page, bs_element)
         else:
             return html_element(page, bs_element)
-
 
 class html_element:
 
@@ -91,7 +84,10 @@ class html_element:
         self.page       = page
         self.bs_element = bs_element
 
-class anchor_element(html_element):
+    def content(self):
+        return self.bs_element.get_text()
+
+class anchor_html_element(html_element):
 
     def __init__(self, page, bs_element):
         super().__init__(page, bs_element)
@@ -103,6 +99,11 @@ class anchor_element(html_element):
         return None
 
 page = html_page("http://gigazine.net")
-element = page.get_element("div .content")
-print(element[5].get_href())
+element_list = page.get_element("div.content section div.card h2 span")
+
+def print_content(element):
+    print ( element.content() )
+
+element_list.roop(print_content)
+print(element_list)
 
