@@ -13,12 +13,22 @@ from urllib.parse import urljoin
 class page:
 
     @staticmethod
-    def connect(url, timeout = 10):
-        req_inst = requests.get(url=url, timeout=timeout)
-        headers  = dict(req_inst.headers)
-        content  = req_inst.content
-        # content_type = req_inst.headers['content-type']
-        return page.create_page_instance(url, headers, content)
+    def connect(url, timeout = 10, logger=None):
+        if logger == None:
+            logger = prawler_logger()
+        try:
+            if url == None:
+                raise ValueError("url is not set.")
+            logger.info(msg("access start url=[{url}]").param(url=url))
+            req_inst = requests.get(url=url, timeout=timeout)
+            logger.info(msg("connect success url=[{url}]").param(url=url))
+            headers  = dict(req_inst.headers)
+            content  = req_inst.content
+            # content_type = req_inst.headers['content-type']
+            return page.create_page_instance(url, headers, content)
+        except Exception as e:
+            logger.error(e)
+            raise e
 
     @staticmethod
     def read_latest(url, basedir):
@@ -84,7 +94,6 @@ class page:
         self.url = url
         self.headers = header
         self.content = content
-
 
     def save(self, basedir):
         if basedir == None or basedir == "":
@@ -169,11 +178,34 @@ class html_page(page):
 class element_list:
 
     def __init__(self, page, bs_element_list):
-
+        self.page = page
         self.element_list = list()
         if bs_element_list != None :
             for bs_element in bs_element_list:
                 self.element_list.append( self.__create_element( page, bs_element ) )
+
+    def get_anchor(self):
+        anchor_bs_element_list = list()
+        for element in self.element_list:
+            anchor_element_list = element.get_anchor()
+            for anchor_element in anchor_element_list.element_list:
+                anchor_bs_element_list.append(anchor_element.bs_element)
+        return element_list(self.page, anchor_bs_element_list)
+
+    def print_anchor(self):
+        for element in self.element_list:
+            if type( element ) is anchor_html_element :
+                href = element.get_href()
+                if href != None :
+                    print ( href )
+
+    def print_element(self):
+        for element in self.element_list:
+            print ( element )
+
+    def print_content(self):
+        for element in self.element_list:
+            print ( element.content() )
 
     def roop(self, func):
         for element in self.element_list:
@@ -194,6 +226,13 @@ class html_element:
 
     def content(self):
         return self.bs_element.get_text()
+
+    def get_anchor(self):
+        anchor_bs_element_list = self.bs_element.select("a")
+        return element_list(self.page, anchor_bs_element_list)
+
+    def __str__(self):
+        return self.bs_element.prettify()
 
 # ===================================================================================================
 class anchor_html_element(html_element):
@@ -268,6 +307,51 @@ class prawler_datastore_mysql(datastore_mysql):
     def __init__(self, host = "127.0.0.1", port = 43306, username = "test_user", password = "pass123", database = "test_db"):
         super().__init__(host, port, )
 
+# ===================================================================================================
+from logging import getLogger, FileHandler, StreamHandler, Formatter, DEBUG
+
+class msg:
+    def __init__(self, message ):
+        self.message = message
+    def param(self, **param):
+        self.param = param
+        return self
+    def __str__(self):
+        return self.message.format(**self.param)
+
+class prawler_logger:
+
+    def __init__(self):
+        # https://docs.python.org/ja/3/library/logging.html#logrecord-attributes
+        self.logger = getLogger(__name__)
+        self.fotmatter = Formatter(fmt='%(asctime)s:%(process)d:%(levelname)s:%(message)s', datefmt='%Y/%m/%d-%H:%M:%S')
+
+        self.stream_handler = StreamHandler()
+        self.stream_handler.setLevel(DEBUG)
+        self.stream_handler.setFormatter(self.fotmatter)
+        self.logger.addHandler(self.stream_handler)
+
+        self.file_handler = FileHandler("example.log")
+        self.file_handler.setLevel(DEBUG)
+        self.file_handler.setFormatter(self.fotmatter)
+        self.logger.addHandler(self.file_handler)
+
+        self.logger.setLevel(DEBUG)
+        self.logger.propagate = False
+    
+    def info(self, msg):
+        self.logger.info(str(msg))
+    
+    def error(self, e):
+        self.logger.error(e)
+
+
+
+# import ConfigParser
+# class config_file:
+#
+#    def __init__(self, filepath="config"):
+#        self.config_file = ConfigParser.ConfigParser()
 
 
 
@@ -279,14 +363,15 @@ class prawler_datastore_mysql(datastore_mysql):
 # page = page.connect("http://gigazine.net")
 # print(type(page.content))
 # print(type(page.headers))
-# element_list = page.get_element("div.content section div.card h2 span")
+# element_list = page.get_element("div.content")
+# element_list.print_element()
 # def print_content(element):
 #     print ( element.content() )
 # element_list.roop(print_content)
 # page.save("/tmp")
 
-page_inst = page.read_latest("http://gigazine.net", "/tmp")
-element_list = page_inst.get_element("div.content section div.card h2 span")
-def print_content(element):
-    print ( element.content() )
-element_list.roop(print_content)
+# page_inst = page.read_latest("http://gigazine.net", "/tmp")
+# element_list = page_inst.get_element("div.content section div.card h2 span")
+# def print_content(element):
+#     print ( element.content() )
+# element_list.roop(print_content)
