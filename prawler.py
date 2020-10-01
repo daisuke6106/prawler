@@ -5,9 +5,67 @@ import pickle
 import hashlib
 import os
 import datetime
+import time
 
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+
+# ===================================================================================================
+class history :
+
+    def __init__(self):
+        self.history = list()
+
+    def add(self, url):
+        self.history.append(url)
+
+    def is_visited(self, arg_url):
+        is_visited = False
+        for url in self.history:
+            if url == arg_url:
+                is_visited = True
+        return is_visited
+
+# ===================================================================================================
+class index_page:
+
+    @staticmethod
+    def connect(url, index_selector, timeout = 10, logger=None):
+        return index_page(page.connect(url, timeout, logger), index_selector, timeout, logger)
+    
+    def __init__(self, start_page, index_selector, timeout = 10, logger=None):
+        if logger == None:
+            logger = prawler_logger.get_instance()
+        self.start_page     = start_page
+        self.now_page       = start_page
+        self.index_selector = index_selector
+        self.timeout        = timeout
+        self.logger         = logger
+        self.history        = history()
+        self.history.add(start_page.url)
+
+    def __iter__(self):
+        return self
+    
+    def __next__(self):
+        element_list         = self.now_page.get_element(self.index_selector)
+        anchor_element_list  = element_list.get_anchor()
+        next_page            = None
+        for anchor_element in anchor_element_list:
+            if self.history.is_visited(anchor_element.get_href()) :
+                self.logger.info(msg("this next page url is visited. now_page=[{url}] nest_page_url=[{nest_page_url}]").param(url=self.now_page.url,nest_page_url=anchor_element.get_href()))
+            else:
+                time.sleep(5)
+                next_page = page.connect(anchor_element.get_href(),  self.timeout, self.logger)
+                break
+        
+        if next_page is not None:
+            self.now_page = next_page
+            self.history.add(anchor_element.get_href())
+            return next_page
+        else:
+            raise StopIteration()
+
 
 # ===================================================================================================
 class page:
@@ -15,7 +73,7 @@ class page:
     @staticmethod
     def connect(url, timeout = 10, logger=None):
         if logger == None:
-            logger = prawler_logger()
+            logger = prawler_logger.get_instance()
         try:
             if url == None:
                 raise ValueError("url is not set.")
@@ -25,7 +83,7 @@ class page:
             headers  = dict(req_inst.headers)
             content  = req_inst.content
             # content_type = req_inst.headers['content-type']
-            return page.create_page_instance(url, headers, content)
+            return page.create_page_instance(url, headers, content, logger)
         except Exception as e:
             logger.error(e)
             raise e
@@ -77,23 +135,24 @@ class page:
         return "headers.txt"
      
     @staticmethod
-    def create_page_instance(url, header, content):
+    def create_page_instance(url, header, content, logger):
         content_type = {v for k,v in header.items() if k.lower() == "content-type"}.pop() # filter(lambda k,v: if k.lo) header['content-type']
         if content_type == None :
-            return page(url, header, content)
+            return page(url, header, content, logger)
         elif "text/html" in content_type :
-            return html_page(url, header, content)
+            return html_page(url, header, content, logger)
         else:
-            return page(url, header, content)
+            return page(url, header, content, logger)
 
     @staticmethod
     def __get_dir_list(dir):
         return list(filter(lambda dir_file: os.path.isdir(dir + dir_file), os.listdir(path=dir)))
 
-    def __init__(self, url, header, content):
+    def __init__(self, url, header, content, logger):
         self.url = url
         self.headers = header
         self.content = content
+        self.logger = logger
 
     def save(self, basedir):
         if basedir == None or basedir == "":
@@ -122,8 +181,8 @@ class page:
 # ===================================================================================================
 class html_page(page):
 
-    def __init__(self, url, header, content):
-        super().__init__(url = url, header = header, content = content)
+    def __init__(self, url, header, content, logger):
+        super().__init__(url = url, header = header, content = content, logger = logger)
         self.soup = BeautifulSoup(self.content, "html.parser")
 
     def get_title(self):
@@ -172,7 +231,11 @@ class html_page(page):
         # 属性存在        soup.select('a[data])
         # class検索        soup.select('a.first')
         # ====================================================================================================
-        return element_list( self, self.soup.select(selector) )
+        self.logger.info(msg("call get_element selector=[{selector}]").param(selector=selector))
+        element_list_result = element_list( self, self.soup.select(selector) )
+        for element in element_list_result:
+            self.logger.info(msg("selected element->{element}").param(element=str(element)))
+        return element_list_result
 
 # ===================================================================================================
 class element_list:
@@ -185,19 +248,46 @@ class element_list:
                 self.element_list.append( self.__create_element( page, bs_element ) )
 
     def get_anchor(self):
-        anchor_bs_element_list = list()
+        self.page.logger.info(msg("call get_anchor."))
+        
+        apended_anchor_list = list()
         for element in self.element_list:
             anchor_element_list = element.get_anchor()
-            for anchor_element in anchor_element_list.element_list:
-                anchor_bs_element_list.append(anchor_element.bs_element)
-        return element_list(self.page, anchor_bs_element_list)
+            for anchor_element in anchor_element_list:
+                if anchor_element.get_href() == "":
+                    continue
+                if self.__has_same_anchor(apended_anchor_list, anchor_element) :
+                    continue
+                apended_anchor_list.append(anchor_element)
+            
+        anchor_bs_element_list = list()
+        for anchor_element in apended_anchor_list:
+            anchor_bs_element_list.append(anchor_element.bs_element)
 
-    def print_anchor(self):
-        for element in self.element_list:
-            if type( element ) is anchor_html_element :
-                href = element.get_href()
-                if href != None :
-                    print ( href )
+        return_element_lsit = element_list(self.page, anchor_bs_element_list)
+        for element in return_element_lsit:
+            self.page.logger.info(msg("selected anchor->{element}").param(element=str(element)))
+        return return_element_lsit
+    
+    def __has_same_anchor(self, appended_anchor_list, check_target_anchor):
+        for appended_anchor in appended_anchor_list:
+            if appended_anchor.get_href() == check_target_anchor.get_href():
+                return True
+        return False
+
+    # def get_anchor_str(self):
+    #     anchor_str_list = list()
+    #     for element in self.get_anchor().element_list:
+    #         href = element.get_href()        
+    #         if href != None and href != "":
+    #             anchor_str_list.append( href )
+    #     return anchor_str_list
+
+    def print_href(self):
+        for element in self.get_anchor().element_list:
+            href = element.get_href()
+            if href != None and href != "":
+                print ( href )
 
     def print_element(self):
         for element in self.element_list:
@@ -217,6 +307,17 @@ class element_list:
         else:
             return html_element(page, bs_element)
 
+    def __iter__(self):
+        self.__iterator_count = 0
+        return self
+    
+    def __next__(self):
+        if self.__iterator_count == len(self.element_list) :
+            raise StopIteration()
+        return_element = self.element_list[self.__iterator_count]
+        self.__iterator_count += 1
+        return return_element
+
 # ===================================================================================================
 class html_element:
 
@@ -228,11 +329,11 @@ class html_element:
         return self.bs_element.get_text()
 
     def get_anchor(self):
-        anchor_bs_element_list = self.bs_element.select("a")
+        anchor_bs_element_list = self.bs_element.find_all("a")
         return element_list(self.page, anchor_bs_element_list)
 
     def __str__(self):
-        return self.bs_element.prettify()
+        return self.bs_element.prettify().replace("\n","")
 
 # ===================================================================================================
 class anchor_html_element(html_element):
@@ -312,14 +413,26 @@ from logging import getLogger, FileHandler, StreamHandler, Formatter, DEBUG
 
 class msg:
     def __init__(self, message ):
-        self.message = message
-    def param(self, **param):
-        self.param = param
+        self.message    = message
+        self.param_dict = None
+    
+    def param(self, **param_dict):
+        self.param_dict = param_dict
         return self
+    
     def __str__(self):
-        return self.message.format(**self.param)
+        if self.param_dict is not None:
+            return self.message.format(**self.param_dict)
+        else:
+            return self.message
 
 class prawler_logger:
+
+    @classmethod
+    def get_instance(cls):
+        if not hasattr(cls, "_instance") :
+            cls._instance = prawler_logger()
+        return cls._instance
 
     def __init__(self):
         # https://docs.python.org/ja/3/library/logging.html#logrecord-attributes
@@ -331,7 +444,7 @@ class prawler_logger:
         self.stream_handler.setFormatter(self.fotmatter)
         self.logger.addHandler(self.stream_handler)
 
-        self.file_handler = FileHandler("example.log")
+        self.file_handler = FileHandler("prawler.log")
         self.file_handler.setLevel(DEBUG)
         self.file_handler.setFormatter(self.fotmatter)
         self.logger.addHandler(self.file_handler)
@@ -345,33 +458,107 @@ class prawler_logger:
     def error(self, e):
         self.logger.error(e)
 
+class prawler_repository :
 
+    @staticmethod
+    def init(dir_path):
+        if os.path.exists(dir_path) :
+            raise ValueError("dir_path is exists. dir_path=[{0}]".format(dir_path))
+        # トレイリングスラッシュがついていない場合、追加
+        dir_path = dir_path if dir_path[-1] == "/" else dir_path + "/"
+        # ベースとなるディレクトリを作成
+        os.makedirs(dir_path)
+        # ログ格納ディレクトリを作成
+        os.makedirs(dir_path + "logs")
+        # データ格納ディレクトリを作成
+        os.makedirs(dir_path + "data")
+        # インデックスファイル
+        index_file.create(dir_path + "index")
+        # インスタンスを生成して返却
+        return prawler_repository(dir_path)
 
-# import ConfigParser
-# class config_file:
-#
-#    def __init__(self, filepath="config"):
-#        self.config_file = ConfigParser.ConfigParser()
+    @staticmethod
+    def read(dir_path):
+        if not os.path.exists(dir_path) :
+            raise ValueError("dir_path is not exists. dir_path=[{0}]".format(dir_path))
+        # トレイリングスラッシュがついていない場合、追加
+        dir_path = dir_path if dir_path[-1] == "/" else dir_path + "/"
+        # インスタンスを生成して返却
+        return prawler_repository(dir_path)
 
+    def __init__(self, dir_path):
+        self.dir_path  = dir_path
+        self.logs_path = dir_path + "logs"
+        self.data_path = dir_path + "data"
+        self.index_file_obj = index_file.read( dir_path + "index")
 
+    def __enter__(self):
+        # 前処理は特になし
+        pass
 
-# ds = datastore_mysql()
-# ds.insert("insert into USERS values(%s, %s)", ("aaa", 11))
-# rows = ds.select("select * from USERS")
-# for row in rows:
-#     print(row[0] + str(row[1]))
-# page = page.connect("http://gigazine.net")
-# print(type(page.content))
-# print(type(page.headers))
-# element_list = page.get_element("div.content")
-# element_list.print_element()
-# def print_content(element):
-#     print ( element.content() )
-# element_list.roop(print_content)
-# page.save("/tmp")
+    def __exit__(self, exc_type, exc_value, traceback):
+        # 後処理
+        self.index_file_obj.close()
 
-# page_inst = page.read_latest("http://gigazine.net", "/tmp")
-# element_list = page_inst.get_element("div.content section div.card h2 span")
-# def print_content(element):
-#     print ( element.content() )
-# element_list.roop(print_content)
+class file:
+    
+    @staticmethod
+    def create(file_path):
+        if os.path.exists(file_path) :
+            raise ValueError("file is exists. file_path=[{0}]".format(file_path))
+        file_obj = open(file_path, "a", encoding='utf-8')
+        file_obj.write("")
+        return file(file_obj)
+
+    def __init__(self, file_obj):
+        self.file_obj = file_obj
+
+    def write(self, write_str):
+        self.file_obj.write(write_str)
+
+    def __enter__(self):
+        # 前処理は特になし
+        pass
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        # 後処理
+        self.file_obj.close()
+
+class index_file(file):
+
+    @staticmethod
+    def read(file_path):
+        if not os.path.exists(file_path) :
+            raise ValueError("file is not exists. file_path=[{0}]".format(file_path))
+        file_obj = open(file_path, "a", encoding='utf-8')
+        url_hash_dict = dict()
+        for line in file_obj :
+            splited_line = line.strip().split(" ")
+            url_str  = splited_line[0]
+            hash_str = splited_line[1]
+            url_hash_dict[url_str] = hash_str
+        return index_file(file_obj, url_hash_dict)
+
+    def __init__(self, file_obj, url_hash_dict):
+        super().__init__(file_obj)
+        self.url_hash_dict = url_hash_dict
+        
+    def write_url(self, page):
+        url_str  = page.url
+        hash_str = page.__url_to_hash(url_str)
+        self.url_hash_dict[url_str] = hash_str
+        self.write(url_str + " " + hash_str)
+
+# index_page_inst = index_page.connect("http://gigazine.net", "#nextpage")
+# for next_index_page in index_page_inst:
+#     for anchor_element in next_index_page.get_element("div.content").get_anchor():
+#         page = page.connect(anchor_element.get_href())
+#         print(page.get_title())
+#         time.sleep(3)
+
+# index_page_inst = index_page.connect("https://mainichi.jp/seiji/1", ".pager")
+# for next_index_page in index_page_inst:
+#     for anchor_element in next_index_page.get_element(".list-typeA").get_anchor():
+#         page = page.connect(anchor_element.get_href())
+#         page.save("/home/dev/prawler_data/mainichi/seiji")
+#         time.sleep(5)
