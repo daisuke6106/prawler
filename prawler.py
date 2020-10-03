@@ -439,19 +439,20 @@ class prawler_logger:
         self.logger = getLogger(__name__)
         self.fotmatter = Formatter(fmt='%(asctime)s:%(process)d:%(levelname)s:%(message)s', datefmt='%Y/%m/%d-%H:%M:%S')
 
-        self.stream_handler = StreamHandler()
-        self.stream_handler.setLevel(DEBUG)
-        self.stream_handler.setFormatter(self.fotmatter)
-        self.logger.addHandler(self.stream_handler)
-
-        self.file_handler = FileHandler("prawler.log")
-        self.file_handler.setLevel(DEBUG)
-        self.file_handler.setFormatter(self.fotmatter)
-        self.logger.addHandler(self.file_handler)
+        stream_handler = StreamHandler()
+        stream_handler.setLevel(DEBUG)
+        stream_handler.setFormatter(self.fotmatter)
+        self.logger.addHandler(stream_handler)
 
         self.logger.setLevel(DEBUG)
         self.logger.propagate = False
     
+    def add_file_log_handler(self, file_path):
+        file_handler = FileHandler(file_path)
+        file_handler.setLevel(DEBUG)
+        file_handler.setFormatter(self.fotmatter)
+        self.logger.addHandler(file_handler)
+
     def info(self, msg):
         self.logger.info(str(msg))
     
@@ -461,10 +462,17 @@ class prawler_logger:
 class prawler_repository :
 
     @staticmethod
-    def init(dir_path):
+    def setup(dir_path, logger):
+        if os.path.exists(dir_path) :
+            return prawler_repository.read(dir_path, logger)
+        else :
+            return prawler_repository.init(dir_path, logger)
+
+    @staticmethod
+    def init(dir_path, logger):
         if os.path.exists(dir_path) :
             raise ValueError("dir_path is exists. dir_path=[{0}]".format(dir_path))
-        # トレイリングスラッシュがついていない場合、追加
+        # トレイリングスラッシュを補完
         dir_path = dir_path if dir_path[-1] == "/" else dir_path + "/"
         # ベースとなるディレクトリを作成
         os.makedirs(dir_path)
@@ -475,21 +483,27 @@ class prawler_repository :
         # インデックスファイル
         index_file.create(dir_path + "index")
         # インスタンスを生成して返却
-        return prawler_repository(dir_path)
+        return prawler_repository(dir_path, logger)
 
     @staticmethod
-    def read(dir_path):
+    def read(dir_path, logger):
         if not os.path.exists(dir_path) :
             raise ValueError("dir_path is not exists. dir_path=[{0}]".format(dir_path))
-        # トレイリングスラッシュがついていない場合、追加
+        # トレイリングスラッシュを補完
         dir_path = dir_path if dir_path[-1] == "/" else dir_path + "/"
         # インスタンスを生成して返却
-        return prawler_repository(dir_path)
+        return prawler_repository(dir_path, logger)
 
-    def __init__(self, dir_path):
+    def __init__(self, dir_path, logger):
         self.dir_path  = dir_path
         self.logs_path = dir_path + "logs"
         self.data_path = dir_path + "data"
+
+        if logger == None:
+            self.logger = prawler_logger.get_instance()
+        else:
+            self.logger = logger
+        self.logger.add_file_log_handler(self.logs_path + "prawler.log")
         self.index_file_obj = index_file.read( dir_path + "index")
 
     def __enter__(self):
@@ -498,7 +512,8 @@ class prawler_repository :
 
     def __exit__(self, exc_type, exc_value, traceback):
         # 後処理
-        self.index_file_obj.close()
+        #self.index_file_obj.close()
+        pass
 
 class file:
     
@@ -525,7 +540,7 @@ class file:
         self.file_obj.close()
 
 class index_file(file):
-
+    
     @staticmethod
     def read(file_path):
         if not os.path.exists(file_path) :
@@ -548,6 +563,8 @@ class index_file(file):
         hash_str = page.__url_to_hash(url_str)
         self.url_hash_dict[url_str] = hash_str
         self.write(url_str + " " + hash_str)
+
+
 
 # index_page_inst = index_page.connect("http://gigazine.net", "#nextpage")
 # for next_index_page in index_page_inst:
