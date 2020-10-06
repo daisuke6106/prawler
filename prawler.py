@@ -30,12 +30,13 @@ class history :
 class index_page:
 
     @staticmethod
-    def connect(url, index_selector, timeout = 10, logger=None):
+    def connect(url, index_selector, timeout = 30, logger=None):
         return index_page(page.connect(url, timeout, logger), index_selector, timeout, logger)
     
     def __init__(self, start_page, index_selector, timeout = 10, logger=None):
         if logger == None:
             logger = prawler_logger.get_instance()
+        self.is_first       = True
         self.start_page     = start_page
         self.now_page       = start_page
         self.index_selector = index_selector
@@ -48,30 +49,32 @@ class index_page:
         return self
     
     def __next__(self):
-        element_list         = self.now_page.get_element(self.index_selector)
-        anchor_element_list  = element_list.get_anchor()
-        next_page            = None
-        for anchor_element in anchor_element_list:
-            if self.history.is_visited(anchor_element.get_href()) :
-                self.logger.info(msg("this next page url is visited. now_page=[{url}] nest_page_url=[{nest_page_url}]").param(url=self.now_page.url,nest_page_url=anchor_element.get_href()))
+        if self.is_first :
+            return self.start_page
+        else :
+            element_list         = self.now_page.get_element(self.index_selector)
+            anchor_element_list  = element_list.get_anchor()
+            next_page            = None
+            for anchor_element in anchor_element_list:
+                if self.history.is_visited(anchor_element.get_href()) :
+                    self.logger.info(msg("this next page url is visited. now_page=[{url}] nest_page_url=[{nest_page_url}]").param(url=self.now_page.url,nest_page_url=anchor_element.get_href()))
+                else:
+                    time.sleep(5)
+                    next_page = page.connect(anchor_element.get_href(),  self.timeout, self.logger)
+                    break
+            if next_page is not None:
+                self.now_page = next_page
+                self.history.add(anchor_element.get_href())
+                return next_page
             else:
-                time.sleep(5)
-                next_page = page.connect(anchor_element.get_href(),  self.timeout, self.logger)
-                break
-        
-        if next_page is not None:
-            self.now_page = next_page
-            self.history.add(anchor_element.get_href())
-            return next_page
-        else:
-            raise StopIteration()
+                raise StopIteration()
 
 
 # ===================================================================================================
 class page:
 
     @staticmethod
-    def connect(url, timeout = 10, logger=None):
+    def connect(url, timeout = 10, logger=None, connect_err_raise = False):
         if logger == None:
             logger = prawler_logger.get_instance()
         try:
@@ -86,7 +89,8 @@ class page:
             return page.create_page_instance(url, headers, content, logger)
         except Exception as e:
             logger.error(e)
-            raise e
+            if connect_err_raise :
+                raise e
 
     @staticmethod
     def read_latest(url, basedir):
@@ -96,7 +100,7 @@ class page:
             raise ValueError("basedir is not dir. basedir=[{0}]".format(basedir))
         if not basedir.endswith("/"):
             basedir = basedir + "/"
-        urlhash = page.__url_to_hash(url)
+        urlhash = page.url_to_hash(url)
         basedir = basedir + urlhash + "/"
         if not os.path.isdir(basedir) :
             raise ValueError("specified url is not saved. url=[{0}] dir=[{1}]".format(url, basedir))
@@ -119,7 +123,7 @@ class page:
         return page.create_page_instance(url, headers, content)
         
     @staticmethod
-    def __url_to_hash(url):
+    def url_to_hash(url):
         return hashlib.md5(url.encode('utf-8')).hexdigest() 
 
     @staticmethod
@@ -161,7 +165,7 @@ class page:
             raise ValueError("basedir is not dir. basedir=[{0}]".format(basedir))
         if not basedir.endswith("/"):
             basedir = basedir + "/"
-        urlhash = page.__url_to_hash(self.url)
+        urlhash = page.url_to_hash(self.url)
         basedir = basedir + urlhash + "/"
         if not os.path.isdir(basedir) :
             os.makedirs(basedir)
@@ -462,20 +466,49 @@ class prawler_logger:
 class prawler_repository :
 
     @staticmethod
-    def setup(dir_path, logger):
+    def setup(dir_path, logger = None):
         if os.path.exists(dir_path) :
             return prawler_repository.read(dir_path, logger)
         else :
             return prawler_repository.init(dir_path, logger)
 
     @staticmethod
-    def init(dir_path, logger):
+    def init(dir_path, logger = None):
         if os.path.exists(dir_path) :
             raise ValueError("dir_path is exists. dir_path=[{0}]".format(dir_path))
         # トレイリングスラッシュを補完
         dir_path = dir_path if dir_path[-1] == "/" else dir_path + "/"
         # ベースとなるディレクトリを作成
         os.makedirs(dir_path)
+        # スクリプト格納ディレクトリを作成
+        os.makedirs(dir_path + "script")
+        # スクリプトファイルファイルのテンプレート
+        with file.create(dir_path + "script" + "/" + "config.py") as config :
+            config.write("#==================================================").write("\n")
+            config.write("# ページ読み込みのタイムアウト値").write("\n")
+            config.write("#==================================================").write("\n")
+            config.write("READ_TIME_OUT=60").write("\n")
+        # スクリプトファイルファイルのテンプレート
+        with file.create(dir_path + "script" + "/" + "template.py") as template :
+            template.write("# from prawler import time").write("\n")
+            template.write("# from prawler import page").write("\n")
+            template.write("# from prawler import index_page").write("\n")
+            template.write("# from prawler import prawler_repository").write("\n")
+            template.write("#==================================================").write("\n")
+            template.write("# 設定ファイル読み込み").write("\n")
+            template.write("#==================================================").write("\n")
+            template.write("import config").write("\n")
+            template.write("#==================================================").write("\n")
+            template.write("# メイン").write("\n")
+            template.write("#==================================================").write("\n")
+            template.write("if __name__ == '__main__':").write("\n")
+            template.write("    repo = prawler_repository.setup(\"" + dir_path + "\")").write("\n")
+            template.write("    index_page_inst = index_page.connect(\"###TARGET_URL###\", \"###element selector###\")").write("\n")
+            template.write("    for next_index_page in index_page_inst:").write("\n")
+            template.write("        for anchor_element in next_index_page.get_element(\"###element selector###\").get_anchor():").write("\n")
+            template.write("            page = page.connect(anchor_element.get_href(), timeout = config.READ_TIME_OUT)").write("\n")
+            template.write("            repo.save(page)").write("\n")
+            template.write("            time.sleep(3)").write("\n")
         # ログ格納ディレクトリを作成
         os.makedirs(dir_path + "logs")
         # データ格納ディレクトリを作成
@@ -486,7 +519,7 @@ class prawler_repository :
         return prawler_repository(dir_path, logger)
 
     @staticmethod
-    def read(dir_path, logger):
+    def read(dir_path, logger = None):
         if not os.path.exists(dir_path) :
             raise ValueError("dir_path is not exists. dir_path=[{0}]".format(dir_path))
         # トレイリングスラッシュを補完
@@ -496,8 +529,9 @@ class prawler_repository :
 
     def __init__(self, dir_path, logger):
         self.dir_path  = dir_path
-        self.logs_path = dir_path + "logs"
-        self.data_path = dir_path + "data"
+        self.logs_path = dir_path + "script" + "/"
+        self.logs_path = dir_path + "logs"   + "/"
+        self.data_path = dir_path + "data"   + "/"
 
         if logger == None:
             self.logger = prawler_logger.get_instance()
@@ -505,6 +539,13 @@ class prawler_repository :
             self.logger = logger
         self.logger.add_file_log_handler(self.logs_path + "prawler.log")
         self.index_file_obj = index_file.read( dir_path + "index")
+
+    def save(self, page):
+        if page == None :
+            self.logger.info(msg("page is nothing. page save was skip."))
+        else :
+            self.index_file_obj.write_url(page)
+            page.save(self.data_path)
 
     def __enter__(self):
         # 前処理は特になし
@@ -521,19 +562,22 @@ class file:
     def create(file_path):
         if os.path.exists(file_path) :
             raise ValueError("file is exists. file_path=[{0}]".format(file_path))
-        file_obj = open(file_path, "a", encoding='utf-8')
+        file_obj = open(file_path, "x", encoding='utf-8')
         file_obj.write("")
-        return file(file_obj)
+        return file(file_path, file_obj)
 
-    def __init__(self, file_obj):
-        self.file_obj = file_obj
+    def __init__(self, file_path, file_obj):
+        self.file_path = file_path
+        self.file_obj  = file_obj
 
     def write(self, write_str):
         self.file_obj.write(write_str)
+        self.file_obj.flush()
+        return self
 
     def __enter__(self):
         # 前処理は特になし
-        pass
+        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         # 後処理
@@ -545,32 +589,69 @@ class index_file(file):
     def read(file_path):
         if not os.path.exists(file_path) :
             raise ValueError("file is not exists. file_path=[{0}]".format(file_path))
-        file_obj = open(file_path, "a", encoding='utf-8')
+        file_obj = open(file_path, "r+", encoding='utf-8')
         url_hash_dict = dict()
-        for line in file_obj :
+        for line in file_obj.readlines() :
             splited_line = line.strip().split(" ")
             url_str  = splited_line[0]
             hash_str = splited_line[1]
             url_hash_dict[url_str] = hash_str
-        return index_file(file_obj, url_hash_dict)
+        return index_file(file_path, file_obj, url_hash_dict)
 
-    def __init__(self, file_obj, url_hash_dict):
-        super().__init__(file_obj)
+    def __init__(self, file_path, file_obj, url_hash_dict):
+        super().__init__(file_path, file_obj)
         self.url_hash_dict = url_hash_dict
         
     def write_url(self, page):
         url_str  = page.url
-        hash_str = page.__url_to_hash(url_str)
-        self.url_hash_dict[url_str] = hash_str
-        self.write(url_str + " " + hash_str)
+        hash_str = page.url_to_hash(url_str)
+        if url_str in self.url_hash_dict :
+            self.url_hash_dict[url_str] = hash_str
+            self.write(url_str + " " + hash_str + "\n")
+
+import time
+import threading
+import configparser
+import pathlib
+class config_file(file):
+
+    @staticmethod
+    def read(file_path):
+        if not os.path.exists(file_path) :
+            raise ValueError("file is not exists. file_path=[{0}]".format(file_path))
+        file_obj = open(file_path, "r", encoding='utf-8')
+        return config_file(file_path, file_obj)
+
+    def __init__(self, file_path, file_obj):
+        super().__init__(file_path, file_obj)
+        self.config = configparser.ConfigParser()
+        self.config.read(file_path)
+        # 最終内容更新日時を取得
+        self.mtime = pathlib.Path(self.file_path).stat().st_mtime
+        self.thread = threading.Thread(target=self.__reload__config__)
+        self.thread.start()
+
+    def __reload__config__(self):
+        while True:
+            print("param is " + self.config["DEFAULT"]["ServerAliveInterval"])
+            # 現在の設定ファイルのタイムスタンプを取得
+            now_mtime = pathlib.Path(self.file_path).stat().st_mtime
+            # 差が出た場合、設定ファイルを再読込
+            if self.mtime != now_mtime :
+                self.config.read(self.file_path)
+                self.mtime = now_mtime
+            # 5秒毎に監視
+            time.sleep(5)
 
 
-
-# index_page_inst = index_page.connect("http://gigazine.net", "#nextpage")
+config = config_file.read("/tmp/a")
+time.sleep(100)
+# repo = prawler_repository.setup("/home/dev/prawler_data/gigazine.net")
+# index_page_inst = index_page.connect("https://gigazine.net/P10440/", "#nextpage")
 # for next_index_page in index_page_inst:
 #     for anchor_element in next_index_page.get_element("div.content").get_anchor():
 #         page = page.connect(anchor_element.get_href())
-#         print(page.get_title())
+#         repo.save(page)
 #         time.sleep(3)
 
 # index_page_inst = index_page.connect("https://mainichi.jp/seiji/1", ".pager")
