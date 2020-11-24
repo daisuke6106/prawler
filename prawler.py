@@ -6,64 +6,11 @@ import hashlib
 import os
 import datetime
 import time
+import shutil
+import subprocess
 
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-
-# ===================================================================================================
-class index_page:
-
-    @staticmethod
-    def connect(url, func_get_timeout, index_selector, func_get_sleep_time,  logger = None, connect_err_raise = False):
-        start_page = page.connect( \
-            url               = url, \
-            timeout           = func_get_timeout(), \
-            logger            = logger, \
-            connect_err_raise = False\
-        )
-        return index_page( \
-            start_page          = start_page, \
-            func_get_timeout    = func_get_timeout, \
-            index_selector      = index_selector, \
-            func_get_sleep_time = func_get_sleep_time, \
-            logger              = logger\
-        )
-    
-    def __init__(self, start_page, func_get_timeout, index_selector, func_get_sleep_time, logger=None):
-        if logger == None:
-            logger = prawler_logger.get_instance()
-        self.is_first            = True
-        self.start_page          = start_page
-        self.now_page            = start_page
-        self.func_get_timeout    = func_get_timeout
-        self.index_selector      = index_selector
-        self.func_get_sleep_time = func_get_sleep_time
-        self.logger              = logger
-
-    def __iter__(self):
-        return self
-    
-    def __next__(self):
-        if self.is_first :
-            self.is_first = False
-            return self.start_page
-        else :
-            anchor_element_list  = self.now_page.get_element(self.index_selector).get_anchor()
-            next_page            = None
-            for anchor_element in anchor_element_list:
-                if self.history.is_visited(anchor_element.get_href()) :
-                    self.logger.info(msg("this next page url is visited. now_page=[{url}] nest_page_url=[{nest_page_url}]").param(url=self.now_page.url,nest_page_url=anchor_element.get_href()))
-                else:
-                    time.sleep(int(self.func_get_sleep_time()))
-                    next_page = page.connect(anchor_element.get_href(),  self.func_get_timeout(), self.logger)
-                    break
-            if next_page is not None:
-                self.now_page = next_page
-                self.history.add(anchor_element.get_href())
-                return next_page
-            else:
-                raise StopIteration()
-
 
 # ===================================================================================================
 class page:
@@ -473,90 +420,113 @@ class prawler_repository :
             raise ValueError("dir_path is exists. dir_path=[{0}]".format(dir_path))
         # トレイリングスラッシュを補完
         dir_path = dir_path if dir_path[-1] == "/" else dir_path + "/"
-        # ベースとなるディレクトリを作成
-        os.makedirs(dir_path)
-        # スクリプト格納ディレクトリを作成
-        os.makedirs(dir_path + "script")
-        # 設定ファイル格納ディレクトリを作成
-        os.makedirs(dir_path + "config")
-        # ログ格納ディレクトリを作成
-        os.makedirs(dir_path + "logs")
-        # データ格納ディレクトリを作成
-        os.makedirs(dir_path + "data")
-        # インデックスファイル
-        history_file.create(dir_path + "index")
-        # 設定ファイルを作成
-        with file.create(dir_path + "config" + "/" + "config.ini") as config :
-            config.write("[DEFAULT]").write("\n")
-            config.write("#==================================================").write("\n")
-            config.write("# ページ読み込みのタイムアウト値").write("\n")
-            config.write("#==================================================").write("\n")
-            config.write("READ_TIME_OUT=60").write("\n")
-            config.write("#==================================================").write("\n")
-            config.write("# スリープタイム").write("\n")
-            config.write("#==================================================").write("\n")
-            config.write("SLEEP_TIME=60").write("\n")
+        # テンプレートディレクトリをコピー
+        shutil.copytree("template", dir_path)
+        # このファイルをコピー
+        shutil.copyfile(os.path.abspath(__file__), dir_path + "script/prawler.py")
+        # GITリポジトリとして登録
+        os.chdir(dir_path)
+        subprocess.call("git init" , shell=True)
+        subprocess.call("git add .", shell=True)
+        subprocess.call("git commit -m\"create repository\"", shell=True)
+        # github用にmasterブランチの名称をmainへ変更
+        subprocess.call("git branch -m master main", shell=True)
+        # GITのリモートリポジトリを追加
+        # subprocess.call("git remote add origin https://localhost/datarepository/XXXXXX", shell=True)
+        # subprocess.call("git push -u origin main", shell=True)
+
+        # # ベースとなるディレクトリを作成
+        # os.makedirs(dir_path)
+        # # スクリプト格納ディレクトリを作成
+        # os.makedirs(dir_path + "script")
+        # # 設定ファイル格納ディレクトリを作成
+        # os.makedirs(dir_path + "config")
+        # # ログ格納ディレクトリを作成
+        # os.makedirs(dir_path + "logs")
+        # # データ格納ディレクトリを作成
+        # os.makedirs(dir_path + "data")
+        # # インデックスファイル
+        # history_file.create(dir_path + "index")
+        # # 設定ファイルを作成
+        # with file.create(dir_path + "config" + "/" + "config.ini") as config :
+        #     config.write("[DEFAULT]").write("\n")
+        #     config.write("#==================================================").write("\n")
+        #     config.write("# ページ読み込みのタイムアウト値").write("\n")
+        #     config.write("#==================================================").write("\n")
+        #     config.write("READ_TIME_OUT=60").write("\n")
+        #     config.write("#==================================================").write("\n")
+        #     config.write("# スリープタイム").write("\n")
+        #     config.write("#==================================================").write("\n")
+        #     config.write("SLEEP_TIME=60").write("\n")
             
-        # スクリプトファイルファイルのテンプレート
-        with file.create(dir_path + "script" + "/" + "template.py") as template :
-            template.write("from prawler import time").write("\n")
-            template.write("from prawler import page").write("\n")
-            template.write("from prawler import prawler_repository").write("\n")
-            template.write("#==================================================").write("\n")
-            template.write("# メイン").write("\n")
-            template.write("#==================================================").write("\n")
-            template.write("if __name__ == '__main__':").write("\n")
-            template.write("    #==================================================").write("\n")
-            template.write("    # 設定ファイル読み込み").write("\n")
-            template.write("    #==================================================").write("\n")
-            template.write("    config_file = config_file.read(\"" + dir_path + "config" + "/" + "config.ini" + "\")").write("\n")
-            template.write("    ").write("\n")
-            template.write("    #==================================================").write("\n")
-            template.write("    # リポジトリのセットアップ").write("\n")
-            template.write("    #==================================================").write("\n")
-            template.write("    repo = prawler_repository.setup(\"" + dir_path + "\")").write("\n")
-            template.write("    #==================================================").write("\n")
-            template.write("    # ロガーのセットアップ").write("\n")
-            template.write("    #==================================================").write("\n")
-            template.write("    logger = repo.logger").write("\n")
-            template.write("    #==================================================").write("\n")
-            template.write("    # 関数定義部").write("\n")
-            template.write("    #==================================================").write("\n")
-            template.write("    # 目的ページに達したときに実行する関数").write("\n")
-            template.write("    def visit_target_page_action(target_page):").write("\n")
-            template.write("        logger.info(msg(\"visit page. url=[{url}]\").param(url=url))").write("\n")
-            template.write("    ").write("\n")
-            template.write("    # タイムアウト時間を取得する関数").write("\n")
-            template.write("    def get_timeout():").write("\n")
-            template.write("        try:").write("\n")
-            template.write("            timeout = config_file.get(\"DEFAULT\",\"timeout\")").write("\n")
-            template.write("            return int(timeout)").write("\n")
-            template.write("        except ValueError as e :").write("\n")
-            template.write("            logger.error(msg(\"An invalid value has been set for the parameter. timeout=[{timeout}]\").param(timeout=timeout))").write("\n")
-            template.write("            raise e").write("\n")
-            template.write("    ").write("\n")
-            template.write("    # スリープ時間を取得する関数").write("\n")
-            template.write("    def get_sleeptime():").write("\n")
-            template.write("        try:").write("\n")
-            template.write("            timeout = config_file.get(\"DEFAULT\",\"sleeptime\")").write("\n")
-            template.write("            return int(timeout)").write("\n")
-            template.write("        except ValueError as e :").write("\n")
-            template.write("            logger.error(msg(\"An invalid value has been set for the parameter. sleeptime=[{sleeptime}]\").param(sleeptime=sleeptime))").write("\n")
-            template.write("            raise e").write("\n")
-            template.write("    ").write("\n")
-            template.write("    # 最初のページを開く").write("\n")
-            template.write("    now_page = page.connect(\"###TARGET_URL###\", timeout = get_timeout(), logger = logger, connect_err_raise = True)").write("\n")
-            template.write("    # 次のページへのURLを取得").write("\n")
-            template.write("    for anchor_element in now_page.get_element(\"###element selector###\").get_anchor():").write("\n")
-            template.write("        if history.is_visited(anchor_element.get_href()) :").write("\n")
-            template.write("            # 訪問済みである").write("\n")
-            template.write("            logger.info(msg(\"this next page url is visited. now_page=[{url}] nest_page_url=[{nest_page_url}]\").param(url=now_page.url,nest_page_url=anchor_element.get_href()))").write("\n")
-            template.write("        else:").write("\n")
-            template.write("            for anchor_element in next_index_page.get_element(\"###element selector###\").get_anchor():").write("\n")
-            template.write("                page = page.connect(anchor_element.get_href(), timeout = get_timeout(), logger = logger, connect_err_raise = True)").write("\n")
-            template.write("                # 最初のページを開く").write("\n")
-            template.write("                repo.save(page)").write("\n")
-            template.write("                time.sleep(get_sleeptime())").write("\n")
+        # # スクリプトファイルファイルのテンプレート
+        # with file.create(dir_path + "script" + "/" + "template.py") as template :
+        #     template.write("from prawler import time").write("\n")
+        #     template.write("from prawler import prawler_repository").write("\n")
+        #     template.write("from prawler import history_file").write("\n")
+        #     template.write("from prawler import page").write("\n")
+        #     
+        #     template.write("#==================================================").write("\n")
+        #     template.write("# メイン").write("\n")
+        #     template.write("#==================================================").write("\n")
+        #     template.write("if __name__ == '__main__':").write("\n")
+        #     template.write("    #==================================================").write("\n")
+        #     template.write("    # 設定ファイル読み込み").write("\n")
+        #     template.write("    #==================================================").write("\n")
+        #     template.write("    config_file = config_file.read(\"" + dir_path + "config" + "/" + "config.ini" + "\")").write("\n")
+        #     template.write("    ").write("\n")
+        #     template.write("    #==================================================").write("\n")
+        #     template.write("    # リポジトリのセットアップ").write("\n")
+        #     template.write("    #==================================================").write("\n")
+        #     template.write("    repo = prawler_repository.setup(\"" + dir_path + "\")").write("\n")
+        #     template.write("    #==================================================").write("\n")
+        #     template.write("    # ロガーのセットアップ").write("\n")
+        #     template.write("    #==================================================").write("\n")
+        #     template.write("    logger = repo.logger").write("\n")
+        #     template.write("    #==================================================").write("\n")
+        #     template.write("    # 関数定義部").write("\n")
+        #     template.write("    #==================================================").write("\n")
+        #     template.write("    # 目的ページに達したときに実行する関数").write("\n")
+        #     template.write("    def visit_target_page_action(target_page):").write("\n")
+        #     template.write("        logger.info(msg(\"visit page. url=[{url}]\").param(url=url))").write("\n")
+        #     template.write("    ").write("\n")
+        #     template.write("    # タイムアウト時間を取得する関数").write("\n")
+        #     template.write("    def get_timeout():").write("\n")
+        #     template.write("        try:").write("\n")
+        #     template.write("            timeout = config_file.get(\"DEFAULT\",\"timeout\")").write("\n")
+        #     template.write("            return int(timeout)").write("\n")
+        #     template.write("        except ValueError as e :").write("\n")
+        #     template.write("            logger.error(msg(\"An invalid value has been set for the parameter. timeout=[{timeout}]\").param(timeout=timeout))").write("\n")
+        #     template.write("            raise e").write("\n")
+        #     template.write("    ").write("\n")
+        #     template.write("    # スリープ時間を取得する関数").write("\n")
+        #     template.write("    def get_sleeptime():").write("\n")
+        #     template.write("        try:").write("\n")
+        #     template.write("            timeout = config_file.get(\"DEFAULT\",\"sleeptime\")").write("\n")
+        #     template.write("            return int(timeout)").write("\n")
+        #     template.write("        except ValueError as e :").write("\n")
+        #     template.write("            logger.error(msg(\"An invalid value has been set for the parameter. sleeptime=[{sleeptime}]\").param(sleeptime=sleeptime))").write("\n")
+        #     template.write("            raise e").write("\n")
+        #     template.write("    ").write("\n")
+        #     template.write("    # インデックスをセットアップ").write("\n")
+        #     template.write("    history_indexpage = history_file.setup(\"" + dir_path + "history_indexpage" + "\")").write("\n")
+        #     template.write("    history_datapage  = history_file.setup(\"" + dir_path + "history_datapage" + "\")").write("\n")
+        #     template.write("    ").write("\n")
+        #     template.write("    # 最初のページを開く").write("\n")
+        #     template.write("    now_page = page.connect(\"###TARGET_URL###\", timeout = get_timeout(), logger = logger, connect_err_raise = True)").write("\n")
+        #     template.write("    # 次のページへのURLを取得").write("\n")
+        #     template.write("    for anchor_element in now_page.get_element(\"###element selector###\").get_anchor():").write("\n")
+        #     template.write("        if history_indexpage.is_visited(anchor_element.get_href()) :").write("\n")
+        #     template.write("            # 訪問済みである").write("\n")
+        #     template.write("            logger.info(msg(\"this next page url is visited. now_page=[{url}] nest_page_url=[{nest_page_url}]\").param(url=now_page.url,nest_page_url=anchor_element.get_href()))").write("\n")
+        #     template.write("        else:").write("\n")
+        #     template.write("            next_index_page = page.connect(anchor_element.get_href(), timeout = get_timeout(), logger = logger, connect_err_raise = True)").write("\n")
+        #     template.write("            for anchor_element in next_index_page.get_element(\"###element selector###\").get_anchor():").write("\n")
+        #     template.write("                page = page.connect(anchor_element.get_href(), timeout = get_timeout(), logger = logger, connect_err_raise = True)").write("\n")
+        #     template.write("                # 最初のページを開く").write("\n")
+        #     template.write("                repo.save(page)").write("\n")
+        #     template.write("                time.sleep(get_sleeptime())").write("\n")
+        #     template.write("            now_page = next_index_page").write("\n")
 
         # インスタンスを生成して返却
         return prawler_repository(dir_path, logger)
@@ -582,7 +552,7 @@ class prawler_repository :
         else:
             self.logger = logger
         self.logger.add_file_log_handler(self.logs_path + "prawler.log")
-        self.index_file_obj = history_file.read( dir_path + "index")
+        self.index_file_obj = history_file.read( self.data_path + "index")
 
     def save(self, page):
         if page == None :
@@ -642,6 +612,8 @@ class history_file(history, file):
 
     @staticmethod
     def setup(file_path, logger = None):
+        # 相対パスを絶対パスへ変換
+        file_path = pathlib.Path(file_path).resolve()
         if os.path.exists(file_path) :
             return history_file.read(file_path)
         else :
@@ -649,12 +621,16 @@ class history_file(history, file):
 
     @staticmethod
     def create(file_path):
+        # 相対パスを絶対パスへ変換
+        file_path = pathlib.Path(file_path).resolve()
         file_instance = file.create(file_path)
         url_hash_dict = dict()
         return history_file(file_instance.file_path, file_instance.file_obj, url_hash_dict)
 
     @staticmethod
     def read(file_path):
+        # 相対パスを絶対パスへ変換
+        file_path = pathlib.Path(file_path).resolve()
         if not os.path.exists(file_path) :
             raise ValueError("file is not exists. file_path=[{0}]".format(file_path))
         file_obj = open(file_path, "r+", encoding='utf-8')
@@ -672,9 +648,10 @@ class history_file(history, file):
         self.url_hash_dict = url_hash_dict
         
     def add(self, url_str):
-        hash_str = page.url_to_hash(url_str)
-        self.write(url_str + " " + hash_str + "\n")
-        super().add(url_str)
+        if not self.is_visited(hash_str):
+            hash_str = page.url_to_hash(url_str)
+            self.write(url_str + " " + hash_str + "\n")
+            super().add(url_str)
 
 import time
 import threading
@@ -684,6 +661,8 @@ class config_file(file):
 
     @staticmethod
     def read(file_path):
+        # 相対パスを絶対パスへ変換
+        file_path = pathlib.Path(file_path).resolve()
         if not os.path.exists(file_path) :
             raise ValueError("file is not exists. file_path=[{0}]".format(file_path))
         file_obj = open(file_path, "r", encoding='utf-8')
