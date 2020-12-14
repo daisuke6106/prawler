@@ -553,6 +553,7 @@ class prawler_repository :
             self.logger = logger
         self.logger.add_file_log_handler(self.logs_path + "prawler.log")
         self.index_file_obj = history_file.read( self.data_path + "index")
+        self.config_file_obj = config_file.read( self.config_path + "config.ini")
 
     def save(self, page):
         if page == None :
@@ -648,7 +649,7 @@ class history_file(history, file):
         self.url_hash_dict = url_hash_dict
         
     def add(self, url_str):
-        if not self.is_visited(hash_str):
+        if not self.is_visited(url_str):
             hash_str = page.url_to_hash(url_str)
             self.write(url_str + " " + hash_str + "\n")
             super().add(url_str)

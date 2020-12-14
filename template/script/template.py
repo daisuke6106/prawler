@@ -1,3 +1,4 @@
+import os
 from prawler import time
 from prawler import prawler_repository
 from prawler import history_file
@@ -78,15 +79,22 @@ class page_iterator:
 # メイン
 # ===================================================================================================
 if __name__ == '__main__':
+
     #==================================================
-    # 設定ファイル読み込み
+    # カレントディレクトリをリポジトリのホームへ変更
     #==================================================
-    config_file = config_file.read("../config/config.ini")
-    
+    os.chdir(os.path.dirname(os.path.abspath(__file__)) + "/../")
+
     #==================================================
     # リポジトリのセットアップ
     #==================================================
-    repo = prawler_repository.setup("../")
+    repo = prawler_repository.setup("./")
+
+    #==================================================
+    # 設定ファイセットアップ
+    #==================================================
+    config_file = repo.config_file_obj
+    
     #==================================================
     # ロガーのセットアップ
     #==================================================
@@ -116,14 +124,41 @@ if __name__ == '__main__':
             logger.error(msg("An invalid value has been set for the parameter. sleeptime=[{sleeptime}]").param(sleeptime=sleeptime))
             raise e
     
+    # スタートページのURLを取得する関数
+    def get_start_page_url():
+        try:
+            start_page_url = config_file.get("DEFAULT","START_PAGE_URL")
+            return start_page_url
+        except ValueError as e :
+            logger.error(msg("An invalid value has been set for the parameter. start_page_url=[{start_page_url}]").param(start_page_url=start_page_url))
+            raise e
+
+    # インデックスページのURLが取得できる要素を選択するセレクター文字列を取得する関数
+    def get_index_page_selector():
+        try:
+            index_page_selector = config_file.get("DEFAULT","INDEX_PAGE_SELECTOR")
+            return index_page_selector
+        except ValueError as e :
+            logger.error(msg("An invalid value has been set for the parameter. index_page_selector=[{index_selector}]").param(index_page_selector=index_page_selector))
+            raise e
+
+    # データページのURLが取得できる要素を選択するセレクター文字列を取得する関数
+    def get_data_page_selector():
+        try:
+            data_page_selector = config_file.get("DEFAULT","DATA_PAGE_SELECTOR")
+            return data_page_selector
+        except ValueError as e :
+            logger.error(msg("An invalid value has been set for the parameter. data_page_selector=[{data_page_selector}]").param(data_page_selector=data_page_selector))
+            raise e
+
     # インデックスをセットアップ
-    history_indexpage = history_file.setup("../history_indexpage")
-    history_datapage  = history_file.setup("../history_datapage")
+    history_indexpage = history_file.setup("./data/history_indexpage")
+    history_datapage  = history_file.setup("./data/history_datapage")
     
     # インデックスページに接続
     index_page_iterator = page_iterator.connect( \
-        url                 = "###TARGET_URL###", \
-        index_selector      = "###element selector###", \
+        url                 = get_start_page_url(), \
+        index_selector      = get_index_page_selector(), \
         func_get_timeout    = get_timeout, \
         func_get_sleep_time = get_sleeptime, \
         history             = history_indexpage, \
@@ -133,20 +168,25 @@ if __name__ == '__main__':
     # インデックスページを順繰りアクセス
     for index_page in index_page_iterator:
 
-        # インデックスページから各データページに順繰りアクセス
-        data_page_iterator = page_iterator.init_by_accessed_page( \
-            start_page          = index_page, \
-            index_selector      = "###element selector###", \
-            func_get_timeout    = get_timeout, \
-            func_get_sleep_time = get_sleeptime, \
-            history             = history_datapage, \
-            logger              = logger, \
-            connect_err_raise   = True \
-        )
+        # インデックスページから各データページのアンカーを取得する
+        anchor_element_list  = index_page.get_element(get_data_page_selector()).get_anchor()
 
-        # データページに順繰りアクセス
-        for data_page in data_page_iterator:
-            
-            # リポジトリに保存
-            repo.save(data_page)
+        # データページのアンカーを順繰りアクセス
+        for anchor_element in anchor_element_list:
+
+            # すでにアクセス済みだったら何もしない
+            if history_datapage.is_visited(anchor_element.get_href()) :
+                logger.info(msg("this next page url is visited. now_page=[{url}] nest_page_url=[{nest_page_url}]").param(url=index_page.url,nest_page_url=anchor_element.get_href()))
+
+            # アクセスしていなかった場合、保存
+            else:
+                # アクセス前にサーバに負荷をかけないようスリープ
+                time.sleep(int(get_sleeptime()))
+
+                # 対象ページにアクセス
+                next_page = page.connect(anchor_element.get_href(),  get_timeout(), logger)
+
+                # リポジトリに保存
+                repo.save(next_page)
+
 
