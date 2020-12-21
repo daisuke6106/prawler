@@ -1,4 +1,5 @@
 import os
+from distutils.util import strtobool
 from prawler import time
 from prawler import prawler_repository
 from prawler import history_file
@@ -99,6 +100,12 @@ if __name__ == '__main__':
     # ロガーのセットアップ
     #==================================================
     logger = repo.logger
+
+    #==================================================
+    # インデックスファイルのセットアップ
+    #==================================================
+    index_file = repo.index_file_obj
+
     #==================================================
     # 関数定義部
     #==================================================
@@ -151,9 +158,17 @@ if __name__ == '__main__':
             logger.error(msg("An invalid value has been set for the parameter. data_page_selector=[{data_page_selector}]").param(data_page_selector=data_page_selector))
             raise e
 
+    # データページのURLが取得できる要素を選択するセレクター文字列を取得する関数
+    def get_save_again():
+        try:
+            save_again = config_file.get("DEFAULT","SAVE_AGAIN")
+            return strtobool(save_again)
+        except ValueError as e :
+            logger.error(msg("An invalid value has been set for the parameter. save_again=[{data_page_selector}]").param(data_page_selector=data_page_selector))
+            raise e
+
     # インデックスをセットアップ
-    history_indexpage = history_file.setup("./data/history_indexpage")
-    history_datapage  = history_file.setup("./data/history_datapage")
+    history_indexpage = repo.setup_index_file("indexpage")
     
     # インデックスページに接続
     index_page_iterator = page_iterator.connect( \
@@ -174,11 +189,11 @@ if __name__ == '__main__':
         # データページのアンカーを順繰りアクセス
         for anchor_element in anchor_element_list:
 
-            # すでにアクセス済みだったら何もしない
-            if history_datapage.is_visited(anchor_element.get_href()) :
+            # 設定として「すでに保存済みだった場合でも再度保存はしない（FALSE）」かつ、すでにアクセス済みだったら何もしない
+            if not get_save_again() and index_file.is_visited(anchor_element.get_href()) :
                 logger.info(msg("this next page url is visited. now_page=[{url}] nest_page_url=[{nest_page_url}]").param(url=index_page.url,nest_page_url=anchor_element.get_href()))
 
-            # アクセスしていなかった場合、保存
+            # 設定として「すでに保存済みだった場合でも再度保存する（TRUE）」もしくは、アクセスしていなかった場合、保存
             else:
                 # アクセス前にサーバに負荷をかけないようスリープ
                 time.sleep(int(get_sleeptime()))

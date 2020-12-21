@@ -546,14 +546,19 @@ class prawler_repository :
         self.config_path = dir_path + "config" + "/"
         self.logs_path   = dir_path + "logs"   + "/"
         self.data_path   = dir_path + "data"   + "/"
+        self.index_path  = dir_path + "index"  + "/"
 
         if logger == None:
             self.logger = prawler_logger.get_instance()
         else:
             self.logger = logger
+        
         self.logger.add_file_log_handler(self.logs_path + "prawler.log")
-        self.index_file_obj = history_file.read( self.data_path + "index")
+        self.index_file_obj  = history_file.read( self.index_path + "index")
         self.config_file_obj = config_file.read( self.config_path + "config.ini")
+
+    def setup_index_file(self, name):
+        return history_file.setup( self.index_path + name )
 
     def save(self, page):
         if page == None :
@@ -676,6 +681,7 @@ class config_file(file):
         # 最終内容更新日時を取得
         self.mtime = pathlib.Path(self.file_path).stat().st_mtime
         self.thread = threading.Thread(target=self.__reload__config__)
+        self.thread.setDaemon(True)
         self.thread.start()
 
     def __reload__config__(self):
@@ -691,24 +697,3 @@ class config_file(file):
 
     def get(self, *keys):
         return self.config.get(*keys)
-
-# history_file = history_file.setup("/tmp/aaa")
-# print(history_file.is_visited("http://google.com"))
-# history_file.add("http://google.com")
-# print(history_file.is_visited("http://google.comq"))
-# print("OK")
-
-# index_page_inst = index_page.connect("https://gigazine.net/", "#nextpage", get_timeout)
-# for next_index_page in index_page_inst:
-#     print(next_index_page.url)
-#     for anchor_element in next_index_page.get_element("div.content").get_anchor():
-#         page = page.connect(anchor_element.get_href())
-#         repo.save(page)
-#         time.sleep(3)
-
-# index_page_inst = index_page.connect("https://mainichi.jp/seiji/1", ".pager")
-# for next_index_page in index_page_inst:
-#     for anchor_element in next_index_page.get_element(".list-typeA").get_anchor():
-#         page = page.connect(anchor_element.get_href())
-#         page.save("/home/dev/prawler_data/mainichi/seiji")
-#         time.sleep(5)
