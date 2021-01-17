@@ -356,21 +356,36 @@ class prawler_datastore_mysql(datastore_mysql):
 
 # ===================================================================================================
 from logging import getLogger, FileHandler, StreamHandler, Formatter, DEBUG
-
+import json
 class msg:
     def __init__(self, message ):
         self.message    = message
         self.param_dict = None
+        self.detail_data = None
     
     def param(self, **param_dict):
         self.param_dict = param_dict
         return self
     
+    def detail(self, **detail_data):
+        self.detail_data = detail_data
+        return self
+    
     def __str__(self):
-        if self.param_dict is not None:
-            return self.message.format(**self.param_dict)
-        else:
-            return self.message
+        # if self.param_dict is not None:
+        #     return self.message.format(**self.param_dict)
+        # else:
+        #     return self.message
+        if self.detail_data is not None:
+            if self.param_dict is not None:
+                return json.dumps({"body":self.message.format(**self.param_dict),**self.detail_data})
+            else:
+                return json.dumps({"body":self.message},**self.detail_data)
+        else :
+            if self.param_dict is not None:
+                return json.dumps({"body":self.message.format(**self.param_dict)})
+            else:
+                return json.dumps({"body":self.message})
 
 class prawler_logger:
 
@@ -383,7 +398,7 @@ class prawler_logger:
     def __init__(self):
         # https://docs.python.org/ja/3/library/logging.html#logrecord-attributes
         self.logger = getLogger(__name__)
-        self.fotmatter = Formatter(fmt='%(asctime)s:%(process)d:%(levelname)s:%(message)s', datefmt='%Y/%m/%d-%H:%M:%S')
+        self.fotmatter = Formatter(fmt='{"timestamp":"%(asctime)s","process":"%(process)d","level":"%(levelname)s","message":%(message)s}', datefmt='%Y/%m/%d-%H:%M:%S')
 
         stream_handler = StreamHandler()
         stream_handler.setLevel(DEBUG)
