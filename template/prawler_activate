@@ -1,0 +1,162 @@
+#!/bin/bash
+####################################################################################################
+# 環境設定
+####################################################################################################
+# アクティブを実行済みか？
+if [ -v IS_ACTIVATED ]; then
+    echo "activated!!"
+    return;
+fi
+
+# 環境の設定
+export BASE_DIR=$(cd $(dirname ${BASH_SOURCE:-$0}); pwd)
+# PATHの設定
+export PATH_BACKUP="${PATH}"
+export PATH=${BASE_DIR}:${PATH}
+
+####################################################################################################
+# ターミナルの設定
+####################################################################################################
+# PS1のバックアップ
+export PS1_BACKUP="${PS1}"
+
+# --------------------------------------------------------------------------------------------------
+# ターミナル設定の参考：https://ezprompt.net/
+# --------------------------------------------------------------------------------------------------
+# get current branch in git repo
+function parse_git_branch() {
+    BRANCH=`git branch 2> /dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/\1/'`
+    if [ ! "${BRANCH}" == "" ]
+    then
+        STAT=`parse_git_dirty`
+        echo "[${BRANCH}]"
+    else
+        echo ""
+    fi
+}
+# get current status of git repo
+function parse_git_dirty {
+    status=`git status 2>&1 | tee`
+    dirty=`echo -n "${status}" 2> /dev/null | grep "modified:" &> /dev/null; echo "$?"`
+    untracked=`echo -n "${status}" 2> /dev/null | grep "Untracked files" &> /dev/null; echo "$?"`
+    ahead=`echo -n "${status}" 2> /dev/null | grep "Your branch is ahead of" &> /dev/null; echo "$?"`
+    newfile=`echo -n "${status}" 2> /dev/null | grep "new file:" &> /dev/null; echo "$?"`
+    renamed=`echo -n "${status}" 2> /dev/null | grep "renamed:" &> /dev/null; echo "$?"`
+    deleted=`echo -n "${status}" 2> /dev/null | grep "deleted:" &> /dev/null; echo "$?"`
+    bits=''
+    if [ "${renamed}" == "0" ]; then
+        bits=">${bits}"
+    fi
+    if [ "${ahead}" == "0" ]; then
+        bits="*${bits}"
+    fi
+    if [ "${newfile}" == "0" ]; then
+        bits="+${bits}"
+    fi
+    if [ "${untracked}" == "0" ]; then
+        bits="?${bits}"
+    fi
+    if [ "${deleted}" == "0" ]; then
+        bits="x${bits}"
+    fi
+    if [ "${dirty}" == "0" ]; then
+        bits="!${bits}"
+    fi
+    if [ ! "${bits}" == "" ]; then
+        echo " ${bits}"
+    else
+        echo ""
+    fi
+}
+# --------------------------------------------------------------------------------------------------
+# 書き方の参考:https://qiita.com/kkenya/items/f7cb4b8787e7ac27a46d
+# --------------------------------------------------------------------------------------------------
+# サンプル
+# export PS1="${ESC}${CHARCOLOR_PURPLE}${END}\u${RES}@${ESC}${CHARCOLOR_WHITE}${END}\h${RES} ${ESC}${BOLD}${BLUE}${END}\W${RES}\$"
+ESC="\[\e["            # 設定開始
+END="\]"               # 設定終了
+RES="\[\e[m\]"         # 設定をもとに戻す
+OFF="0;"               # 属性なし
+BOLD="1;"              # 太字
+UNDER_BAR="4;"         # 下線
+TENMETSU="5;"          # 点滅
+HANTEN="7;"            # 反転
+HIHYOUJI="8;"          # 非表示
+CHARCOLOR_BLACK="30m"  # 文字色
+CHARCOLOR_RED="31m"    # 文字色
+CHARCOLOR_GREEN="32m"  # 文字色
+CHARCOLOR_YELLOW="33m" # 文字色
+CHARCOLOR_BLUE="34m"   # 文字色
+CHARCOLOR_PURPLE="35m" # 文字色
+CHARCOLOR_CYAN="36m"   # 文字色
+CHARCOLOR_WHITE="37m"  # 文字色
+BACKCOLOR_BLACK="40m"  # 背景色
+BACKCOLOR_RED="41m"    # 背景色
+BACKCOLOR_GREEN="42m"  # 背景色
+BACKCOLOR_YELLOW="43m" # 背景色
+BACKCOLOR_BLUE="44m"   # 背景色
+BACKCOLOR_PURPLE="45m" # 背景色
+BACKCOLOR_CYAN="46m"   # 背景色
+BACKCOLOR_WHITE="47m"  # 背景色
+
+# --------------------------------------------------------------------------------------------------
+# PS1の設定
+# --------------------------------------------------------------------------------------------------
+export PS1="${ESC}${BOLD}${CHARCOLOR_GREEN}${END}\u@\h${RES}:${ESC}${BOLD}${CHARCOLOR_BLUE}${END}\w${RES}:${ESC}${BOLD}${CHARCOLOR_CYAN}${END}(prawler_active@${BASE_DIR})${RES}\`parse_git_branch\`$ "
+
+# --------------------------------------------------------------------------------------------------
+# 行末オートワープ機能(折返し機能)の無効化
+# --------------------------------------------------------------------------------------------------
+printf '\033[?7l'
+
+####################################################################################################
+# コマンド
+####################################################################################################
+if [ ${#LIST[@]} = 0 ]; then
+	export LIST=()
+fi
+
+prawler.list.add() {
+	if [ $# = 0 ]; then
+		return
+	fi
+	for i in $@;
+	do
+		LIST+=($i)
+	done
+}
+
+prawler.list.show() {
+	if [ ${#LIST[@]} = 0 ]; then
+		return
+	fi
+	for i in ${LIST[@]};
+	do
+		echo $i
+	done
+}
+
+prawler.list.clear() {
+	export LIST=()
+}
+
+prawler.url_list(){
+    for url_file in $(find ${BASE_DIR} -type f -name url);do cat $url_file; echo "" ;done
+}
+
+prawler.download_all(){
+    python ${BASE_DIR}/script/download_all.py $*
+}
+
+prawler.print_datapage(){
+    python ${BASE_DIR}/script/print_datapage.py $*
+}
+
+####################################################################################################
+# 後処理
+####################################################################################################
+export IS_ACTIVATED="ACTIVATED"
+
+# なぐり書き
+# alias json_parse="python -m json.tool"
+# alias unicore_decode="sed 's/\\\u\(....\)/\&#x\1;/g' | nkf --numchar-input -w"

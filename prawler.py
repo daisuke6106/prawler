@@ -35,7 +35,9 @@ class page:
                 raise e
 
     @staticmethod
-    def read_latest(url, basedir):
+    def read_latest(url, basedir, logger=None):
+        if logger == None:
+            logger = prawler_logger.get_instance()
         if basedir == None or basedir == "":
             raise ValueError("basedir is set.")
         if not os.path.isdir(basedir) :
@@ -48,10 +50,12 @@ class page:
             raise ValueError("specified url is not saved. url=[{0}] dir=[{1}]".format(url, basedir))
         dir_list = page.__get_dir_list(basedir)
         basedir = basedir + dir_list[0]
-        return page.read(url, basedir)
+        return page.read(url, basedir, logger)
         
     @staticmethod
-    def read(url, dir):
+    def read(url, dir, logger=None):
+        if logger == None:
+            logger = prawler_logger.get_instance()
         if dir == None or dir == "":
             raise ValueError("dir is set.")
         if not os.path.isdir(dir) :
@@ -62,7 +66,7 @@ class page:
             headers = pickle.loads(f_headers.read())
         with open(dir + page.__get_content_file_name() , 'rb') as f_content:
             content = f_content.read()
-        return page.create_page_instance(url, headers, content)
+        return page.create_page_instance(url, headers, content, logger)
         
     @staticmethod
     def url_to_hash(url):
@@ -122,6 +126,13 @@ class page:
         with open(basedir + self.__get_headers_txt_file_name(), "w") as f_headers:
             for key, value in self.headers.items():
                 f_headers.write("\"" + key +"\",\"" + value + "\"\n")
+        self.logger.info(msg("page saved.")
+            .detail(
+                url = self.url,
+                url_hash = urlhash,
+                save_dir=basedir
+            )
+        )
 
 
 # ===================================================================================================
@@ -177,10 +188,15 @@ class html_page(page):
         # 属性存在        soup.select('a[data])
         # class検索        soup.select('a.first')
         # ====================================================================================================
-        self.logger.info(msg("call get_element selector=[{selector}]").param(selector=selector))
+        
         element_list_result = element_list( self, self.soup.select(selector) )
-        for element in element_list_result:
-            self.logger.info(msg("selected element->{element}").param(element=str(element)))
+        self.logger.info(msg("call get_element.")
+            .detail(
+                selector = selector,
+                element_list = [str(element) for element in element_list_result]),
+            )
+        #for element in element_list_result:
+        #    self.logger.info(msg("selected element->{element}").param(element=str(element)))
         return element_list_result
 
 # ===================================================================================================
@@ -193,9 +209,13 @@ class element_list:
             for bs_element in bs_element_list:
                 self.element_list.append( self.__create_element( page, bs_element ) )
 
+    def content(self):
+        content = ""
+        for element in self.element_list:
+            content += element.content()
+        return content
+
     def get_anchor(self):
-        self.page.logger.info(msg("call get_anchor."))
-        
         apended_anchor_list = list()
         for element in self.element_list:
             anchor_element_list = element.get_anchor()
@@ -211,8 +231,13 @@ class element_list:
             anchor_bs_element_list.append(anchor_element.bs_element)
 
         return_element_lsit = element_list(self.page, anchor_bs_element_list)
-        for element in return_element_lsit:
-            self.page.logger.info(msg("selected anchor->{element}").param(element=str(element)))
+        self.page.logger.info(
+            msg("call get_anchor.").detail(
+                selected_anchor_list=[str(element) for element in return_element_lsit]
+            )
+        )
+        # for element in return_element_lsit:
+        #     self.page.logger.info(msg("selected anchor->{element}").param(element=str(element)))
         return return_element_lsit
     
     def __has_same_anchor(self, appended_anchor_list, check_target_anchor):
@@ -270,6 +295,9 @@ class html_element:
     def __init__(self, page, bs_element):
         self.page       = page
         self.bs_element = bs_element
+
+    def get_attr(self, attr):
+        return self.bs_element[attr]
 
     def content(self):
         return self.bs_element.get_text()
@@ -372,15 +400,11 @@ class msg:
         return self
     
     def __str__(self):
-        # if self.param_dict is not None:
-        #     return self.message.format(**self.param_dict)
-        # else:
-        #     return self.message
         if self.detail_data is not None:
             if self.param_dict is not None:
-                return json.dumps({"body":self.message.format(**self.param_dict),**self.detail_data})
+                return json.dumps({"body":self.message.format(**self.param_dict), **self.detail_data})
             else:
-                return json.dumps({"body":self.message},**self.detail_data)
+                return json.dumps({"body":self.message, **self.detail_data})
         else :
             if self.param_dict is not None:
                 return json.dumps({"body":self.message.format(**self.param_dict)})
@@ -488,6 +512,12 @@ class prawler_repository :
         else :
             self.index_file_obj.add(page.url)
             page.save(self.data_path)
+
+    def read_latest_page(self, url):
+        return page.read_latest(url, self.data_path)
+
+    def is_saved(self, url):
+        return os.path.isdir(self.data_path + page.url_to_hash(url) + "/")
 
     def __enter__(self):
         # 前処理は特になし

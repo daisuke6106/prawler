@@ -63,12 +63,12 @@ class page_iterator:
             anchor_element_list  = self.now_page.get_element(self.index_selector).get_anchor()
             next_page            = None
             for anchor_element in anchor_element_list:
-                if self.history.is_visited(anchor_element.get_href()) :
-                    self.logger.info(msg("this next page url is visited. now_page=[{url}] nest_page_url=[{nest_page_url}]").param(url=self.now_page.url,nest_page_url=anchor_element.get_href()))
-                else:
-                    time.sleep(int(self.func_get_sleep_time()))
-                    next_page = page.connect(anchor_element.get_href(),  self.func_get_timeout(), self.logger)
-                    break
+                # if self.history.is_visited(anchor_element.get_href()) :
+                #     self.logger.info(msg("this next page url is visited. now_page=[{url}] nest_page_url=[{nest_page_url}]").param(url=self.now_page.url,nest_page_url=anchor_element.get_href()))
+                # else:
+                time.sleep(int(self.func_get_sleep_time()))
+                next_page = page.connect(anchor_element.get_href(),  self.func_get_timeout(), self.logger)
+                break
             if next_page is not None:
                 self.now_page = next_page
                 self.history.add(anchor_element.get_href())
@@ -190,8 +190,13 @@ if __name__ == '__main__':
         for anchor_element in anchor_element_list:
 
             # 設定として「すでに保存済みだった場合でも再度保存はしない（FALSE）」かつ、すでにアクセス済みだったら何もしない
-            if not get_save_again() and index_file.is_visited(anchor_element.get_href()) :
-                logger.info(msg("this next page url is visited. now_page=[{url}] nest_page_url=[{nest_page_url}]").param(url=index_page.url,nest_page_url=anchor_element.get_href()))
+            if not get_save_again() and repo.is_saved(anchor_element.get_href()) :
+                logger.info(
+                    msg("this next page url is visited.")
+                    .detail(
+                        next_page_url=anchor_element.get_href()
+                    )
+                )
 
             # 設定として「すでに保存済みだった場合でも再度保存する（TRUE）」もしくは、アクセスしていなかった場合、保存
             else:
