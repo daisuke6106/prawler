@@ -8,6 +8,7 @@ import datetime
 import time
 import shutil
 import subprocess
+import argparse
 
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
@@ -649,3 +650,23 @@ class config_file(file):
 
     def get(self, *keys):
         return self.config.get(*keys)
+
+# ===================================================================================================
+# メイン
+# ===================================================================================================
+if __name__ == '__main__':
+
+    #==================================================
+    # コマンド引数
+    # 参考：https://qiita.com/kzkadc/items/e4fc7bc9c003de1eb6d0
+    #==================================================
+    argpaese = argparse.ArgumentParser(description="スクレイピングを行うためのリポジトリを所定のディレクトリに作成する。")
+    # 必須オプション
+    argpaese.add_argument("dir", help="リポジトリの作成先")
+    # 引数を解析
+    args = argpaese.parse_args()
+    # 引数を取得
+    dir = args.dir
+    # リポジトリを作成する。
+    prawler_repository.init(dir)
+    
