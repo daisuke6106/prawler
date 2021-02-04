@@ -10,7 +10,7 @@ from distutils.util import strtobool
 from prawler import time
 from prawler import prawler_repository
 from prawler import history_file
-from prawler import prawler_logger
+from prawler import prawler_logger_nonlog
 from prawler import msg
 from prawler import page
 from prawler import config_file
@@ -58,7 +58,7 @@ if __name__ == '__main__':
     args = argpaese.parse_args()
     # 引数を取得
     url = args.url
-    
+
     #==================================================
     # カレントディレクトリをリポジトリのホームへ変更
     #==================================================
@@ -67,7 +67,7 @@ if __name__ == '__main__':
     #==================================================
     # リポジトリのセットアップ
     #==================================================
-    repository = prawler_repository.setup("./")
+    repository = prawler_repository.setup("./", prawler_logger_nonlog.get_instance())
 
     #==================================================
     # 保存済みのページを読み込み

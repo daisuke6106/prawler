@@ -1,4 +1,4 @@
 #!/bin/bash
 PRAWLER_HOME="$(dirname ${0})"
 export PYTHONPATH="${PRAWLER_HOME}:${PYTHONPATH}"
-python prawler.py $*
+python ${PRAWLER_HOME}/prawler.py $*

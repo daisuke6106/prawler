@@ -109,10 +109,6 @@ if __name__ == '__main__':
     #==================================================
     # 関数定義部
     #==================================================
-    # 目的ページに達したときに実行する関数
-    def visit_target_page_action(target_page):
-        logger.info(msg("visit page. url=[{url}]").param(url=url))
-    
     # タイムアウト時間を取得する関数
     def get_timeout():
         try:
@@ -125,8 +121,8 @@ if __name__ == '__main__':
     # スリープ時間を取得する関数
     def get_sleeptime():
         try:
-            timeout = config_file.get("DEFAULT","SLEEP_TIME")
-            return int(timeout)
+            sleeptime = config_file.get("DEFAULT","SLEEP_TIME")
+            return int(sleeptime)
         except ValueError as e :
             logger.error(msg("An invalid value has been set for the parameter. sleeptime=[{sleeptime}]").param(sleeptime=sleeptime))
             raise e
@@ -164,7 +160,7 @@ if __name__ == '__main__':
             save_again = config_file.get("DEFAULT","SAVE_AGAIN")
             return strtobool(save_again)
         except ValueError as e :
-            logger.error(msg("An invalid value has been set for the parameter. save_again=[{data_page_selector}]").param(data_page_selector=data_page_selector))
+            logger.error(msg("An invalid value has been set for the parameter. save_again=[{save_again}]").param(save_again=save_again))
             raise e
 
     # インデックスをセットアップ

@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import argparse
 
+from abc import ABCMeta, abstractmethod
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
@@ -412,7 +413,41 @@ class msg:
             else:
                 return json.dumps({"body":self.message})
 
-class prawler_logger:
+
+    
+class abstract_prawler_logger(metaclass=ABCMeta):
+
+    @abstractmethod
+    def info(self, msg):
+        pass
+
+    @abstractmethod
+    def error(self, e):
+        pass
+
+    @abstractmethod
+    def add_file_log_handler(self, file_path):
+        pass
+
+class prawler_logger_nonlog(abstract_prawler_logger):
+
+    @classmethod
+    def get_instance(cls):
+        if not hasattr(cls, "_instance") :
+            cls._instance = prawler_logger_nonlog()
+        return cls._instance
+
+    def info(self, msg):
+        pass
+
+    def error(self, e):
+        pass
+
+    def add_file_log_handler(self, file_path):
+        pass
+
+
+class prawler_logger(abstract_prawler_logger):
 
     @classmethod
     def get_instance(cls):
@@ -429,7 +464,6 @@ class prawler_logger:
         stream_handler.setLevel(DEBUG)
         stream_handler.setFormatter(self.fotmatter)
         self.logger.addHandler(stream_handler)
-
         self.logger.setLevel(DEBUG)
         self.logger.propagate = False
     
@@ -515,7 +549,7 @@ class prawler_repository :
             page.save(self.data_path)
 
     def read_latest_page(self, url):
-        return page.read_latest(url, self.data_path)
+        return page.read_latest(url, basedir=self.data_path, logger=self.logger)
 
     def is_saved(self, url):
         return os.path.isdir(self.data_path + page.url_to_hash(url) + "/")
@@ -655,6 +689,11 @@ class config_file(file):
 # メイン
 # ===================================================================================================
 if __name__ == '__main__':
+
+    #==================================================
+    # カレントディレクトリをリポジトリのホームへ変更
+    #==================================================
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     #==================================================
     # コマンド引数
