@@ -16,17 +16,43 @@ from urllib.parse import urljoin
 
 # ===================================================================================================
 class page:
+    """
+    単一のページを表すクラス
+
+    任意のURLに接続して、HTMLのパーサ、DOM、保存などの機能を保有する。
+    """
 
     @staticmethod
-    def connect(url, timeout = 10, logger=None, connect_err_raise = False):
+    def connect(url:str, timeout:int = 10, logger=None, connect_err_raise:bool = False):
+        """ ページに接続する。
+        
+        引数にしていされたURLにアクセスする。
+
+        Args:
+            url(str):接続先URL
+            timeout(int):接続時のタイムアウト設定値
+            logger(prawler_logger):このクラスの処理で使用するロガー
+            connect_err_raise(boolean):ページアクセスに失敗したときに例外を送出するかいなかのフラグ
+        Raises:
+            ValueError: 引数が不足しているもしくは、アクセスエラーが発生した場合
+        Returns:
+            page:URLのページインスタンス
+        """
         if logger == None:
             logger = prawler_logger.get_instance()
         try:
             if url == None:
                 raise ValueError("url is not set.")
             logger.info(msg("access start url=[{url}]").param(url=url))
-            req_inst = requests.get(url=url, timeout=timeout)
-            logger.info(msg("connect success url=[{url}]").param(url=url))
+            req_inst = requests.get(url=url, headers = {
+                "accept"         : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+                "accept-encoding": "gzip, deflate, br",
+                "accept-language": "ja,en-US;q=0.9,en;q=0.8",
+                "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36"
+                },timeout=timeout)
+            logger.info(msg("connect success url=[{url}], status_code=[{status_code}]").param(url=url, status_code=req_inst.status_code))
+            if (req_inst.status_code != 200):
+                raise ValueError("bat status code. status_code=[{0}]".format(req_inst.status_code))
             headers  = dict(req_inst.headers)
             content  = req_inst.content
             # content_type = req_inst.headers['content-type']
@@ -37,7 +63,18 @@ class page:
                 raise e
 
     @staticmethod
-    def read_latest(url, basedir, logger=None):
+    def read_latest(url:str, basedir:str, logger=None):
+        """ 保存済みのもっとも新しいページ情報でページインスタンスを生成する。
+        
+        Args:
+            url(str):読み込み対象のURL
+            basedir(int):保存先のディレクトリパス（指定ディレクトリ直下にURLがハッシュ化されたディレクトリがある）
+            logger(prawler_logger):このクラスの処理で使用するロガー
+        Raises:
+            ValueError: 引数が不足しているもしくは、アクセスエラーが発生した場合
+        Returns:
+            page:URLのページインスタンス
+        """
         if logger == None:
             logger = prawler_logger.get_instance()
         if basedir == None or basedir == "":
@@ -55,7 +92,18 @@ class page:
         return page.read(url, basedir, logger)
         
     @staticmethod
-    def read(url, dir, logger=None):
+    def read(url:str, dir:str, logger=None):
+        """ 保存済みのページ情報でページインスタンスを生成する。
+        
+        Args:
+            url(str):読み込み対象のURL
+            basedir(int):保存先のディレクトリパス（指定ディレクトリ直下にcontentファイルなどがあるディレクトリを期待する。）
+            logger(prawler_logger):このクラスの処理で使用するロガー
+        Raises:
+            ValueError: 引数が不足しているもしくは、アクセスエラーが発生した場合
+        Returns:
+            page:URLのページインスタンス
+        """
         if logger == None:
             logger = prawler_logger.get_instance()
         if dir == None or dir == "":
@@ -71,7 +119,14 @@ class page:
         return page.create_page_instance(url, headers, content, logger)
         
     @staticmethod
-    def url_to_hash(url):
+    def url_to_hash(url:str) -> str:
+        """ URLをハッシュ化（MD5）した文字列にして返却する。
+        
+        Args:
+            url(str):対象のURL
+        Returns:
+            URL文字列をハッシュ化した文字列
+        """
         return hashlib.md5(url.encode('utf-8')).hexdigest() 
 
     @staticmethod
@@ -87,7 +142,18 @@ class page:
         return "headers.txt"
      
     @staticmethod
-    def create_page_instance(url, header, content, logger):
+    def create_page_instance(url:str, header:dict, content:str, logger:prawler_logger)->page:
+        """ 引数に指定された情報をもとにページのインスタンスを生成する。
+
+        クラスはヘッダに指定されている「content-type」をもとに決定される。
+
+        Args:
+            url(str):URL
+            header(dict):レスポンスヘッダ
+            logger(prawler_logger):このクラスの処理で使用するロガー
+        Returns:
+            page:URLのページインスタンス
+        """
         content_type = {v for k,v in header.items() if k.lower() == "content-type"}.pop() # filter(lambda k,v: if k.lo) header['content-type']
         if content_type == None :
             return page(url, header, content, logger)
@@ -106,7 +172,20 @@ class page:
         self.content = content
         self.logger = logger
 
-    def save(self, basedir):
+    def save(self, basedir) -> None:
+        """ このページを引数に指定された場所に保存する。
+
+        引数に指定されたディレクトリ直下に「URLをハッシュ化したディレクトリ名」を作成、
+        さらにその下に現在日時（YYYYMMDDHHMMSS）のディレクトリを作成し、そのディレクトリ配下に
+        レスポンスヘッダ、ページ本体などが作成される。
+
+        Args:
+            url(str):URL
+            header(dict):レスポンスヘッダ
+            logger(prawler_logger):このクラスの処理で使用するロガー
+        Returns:
+            page:URLのページインスタンス
+        """
         if basedir == None or basedir == "":
             raise ValueError("basedir is set.")
         if not os.path.isdir(basedir) :
@@ -137,38 +216,39 @@ class page:
         )
 
 
-# ===================================================================================================
 class html_page(page):
+    """
+    単一のHTMLページを表すクラス
 
+    任意のURLに接続して、HTMLのパーサ、DOM、保存などの機能を保有する。
+    """
     def __init__(self, url, header, content, logger):
         super().__init__(url = url, header = header, content = content, logger = logger)
         self.soup = BeautifulSoup(self.content, "html.parser")
 
-    def get_title(self):
-        """
-        
-        :return:
+    def get_title(self) -> str:
+        """ このページのタイトルを取得し、返却する。
+
+        Returns:
+            str:このページのタイトル
         """
         return self.soup.find("title").get_text()
 
-    def get_element(self, selector):
-        """
-        引数に指定された要素を取得
+    def get_element(self, selector:str) -> element_list:
+        """ 引数に指定された要素を取得し、返却する。
 
         参考:https://qiita.com/Chanmoro/items/db51658b073acddea4ac
              https://www.pynote.info/entry/beautiful-soup-find-elements
              https://python.civic-apps.com/beautifulsoup4-selector/
              http://python.zombie-hunting-club.com/entry/2017/11/08/192731
-        Parameters
-        ----------
-        selector : str
-            取得対象の要素
-            div配下のp2クラスを取得する場合、"div > .p2"
 
-        Returns
-        -------
-        element : 
-            取得結果
+        
+        Args:
+            selector(str):取得対象の要素。例：div配下のp2クラスを取得する場合、"div > .p2"
+            header(dict):レスポンスヘッダ
+            logger(prawler_logger):このクラスの処理で使用するロガー
+        Returns:
+            page:URLのページインスタンス
         """
 
         # ====================================================================================================
@@ -190,15 +270,12 @@ class html_page(page):
         # 属性存在        soup.select('a[data])
         # class検索        soup.select('a.first')
         # ====================================================================================================
-        
         element_list_result = element_list( self, self.soup.select(selector) )
         self.logger.info(msg("call get_element.")
             .detail(
                 selector = selector,
                 element_list = [str(element) for element in element_list_result]),
             )
-        #for element in element_list_result:
-        #    self.logger.info(msg("selected element->{element}").param(element=str(element)))
         return element_list_result
 
 # ===================================================================================================
@@ -460,13 +537,19 @@ class prawler_logger(abstract_prawler_logger):
         self.logger = getLogger(__name__)
         self.fotmatter = Formatter(fmt='{"timestamp":"%(asctime)s","process":"%(process)d","level":"%(levelname)s","message":%(message)s}', datefmt='%Y/%m/%d-%H:%M:%S')
 
+        # stream_handler = StreamHandler()
+        # stream_handler.setLevel(DEBUG)
+        # stream_handler.setFormatter(self.fotmatter)
+        # self.logger.addHandler(stream_handler)
+        self.logger.setLevel(DEBUG)
+        self.logger.propagate = False
+    
+    def add_console_log_handler(self):
         stream_handler = StreamHandler()
         stream_handler.setLevel(DEBUG)
         stream_handler.setFormatter(self.fotmatter)
         self.logger.addHandler(stream_handler)
-        self.logger.setLevel(DEBUG)
-        self.logger.propagate = False
-    
+
     def add_file_log_handler(self, file_path):
         file_handler = FileHandler(file_path)
         file_handler.setLevel(DEBUG)
