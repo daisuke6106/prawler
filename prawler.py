@@ -242,7 +242,6 @@ class html_page(page):
              https://python.civic-apps.com/beautifulsoup4-selector/
              http://python.zombie-hunting-club.com/entry/2017/11/08/192731
 
-        
         Args:
             selector(str):取得対象の要素。例：div配下のp2クラスを取得する場合、"div > .p2"
             header(dict):レスポンスヘッダ
@@ -280,7 +279,13 @@ class html_page(page):
 
 # ===================================================================================================
 class element_list:
+    """
+    HTMLの複数の要素の要素を表すクラス
 
+    HTMLのページに対して、DOM操作を行い、要素の一覧を取得するような場合、このクラスの単一のインスタンスが返却される。
+    このインスタンスはfor文で１要素ずつ取り出せることができる。
+    
+    """
     def __init__(self, page, bs_element_list):
         self.page = page
         self.element_list = list()
@@ -288,13 +293,31 @@ class element_list:
             for bs_element in bs_element_list:
                 self.element_list.append( self.__create_element( page, bs_element ) )
 
-    def content(self):
+    def content(self) -> str:
+        """
+        要素の内容を単一の文字列にして返却する。
+
+        この要素一覧が持つ要素の内容を単一の文字に結合して返却する。
+
+        Returns:
+            str:要素の内容
+        """
         content = ""
         for element in self.element_list:
             content += element.content()
         return content
 
-    def get_anchor(self):
+    def get_anchor(self) -> element_list:
+        """
+        このインスタンスが持つ要素からアンカーの一覧を抽出し、新たな要素一覧として返却する。
+
+        なお、返却されるアンカーの一覧は以下の内容が除外される。
+        ①href属性が空
+        ②重複しているhrefを持つ要素
+
+        Returns:
+            str:要素の内容
+        """
         apended_anchor_list = list()
         for element in self.element_list:
             anchor_element_list = element.get_anchor()
@@ -315,8 +338,6 @@ class element_list:
                 selected_anchor_list=[str(element) for element in return_element_lsit]
             )
         )
-        # for element in return_element_lsit:
-        #     self.page.logger.info(msg("selected anchor->{element}").param(element=str(element)))
         return return_element_lsit
     
     def __has_same_anchor(self, appended_anchor_list, check_target_anchor):
@@ -325,31 +346,19 @@ class element_list:
                 return True
         return False
 
-    # def get_anchor_str(self):
-    #     anchor_str_list = list()
-    #     for element in self.get_anchor().element_list:
-    #         href = element.get_href()        
-    #         if href != None and href != "":
-    #             anchor_str_list.append( href )
-    #     return anchor_str_list
-
     def print_href(self):
+        """
+        このインスタンスが持つ要素からアンカーの一覧を抽出し、標準出力に出力する。
+
+        なお、返却されるアンカーの一覧は以下の内容が除外される。
+        ①href属性が空
+        ②重複しているhrefを持つ要素
+
+        """
         for element in self.get_anchor().element_list:
             href = element.get_href()
             if href != None and href != "":
                 print ( href )
-
-    def print_element(self):
-        for element in self.element_list:
-            print ( element )
-
-    def print_content(self):
-        for element in self.element_list:
-            print ( element.content() )
-
-    def roop(self, func):
-        for element in self.element_list:
-            func(element)
 
     def __create_element(self, page, bs_element):
         if bs_element.name == "a":
