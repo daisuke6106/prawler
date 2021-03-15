@@ -284,7 +284,7 @@ class element_list:
 
     HTMLのページに対して、DOM操作を行い、要素の一覧を取得するような場合、このクラスの単一のインスタンスが返却される。
     このインスタンスはfor文で１要素ずつ取り出せることができる。
-    
+
     """
     def __init__(self, page, bs_element_list):
         self.page = page
@@ -370,7 +370,7 @@ class element_list:
         self.__iterator_count = 0
         return self
     
-    def __next__(self):
+    def __next__(self) -> html_element:
         if self.__iterator_count == len(self.element_list) :
             raise StopIteration()
         return_element = self.element_list[self.__iterator_count]
@@ -379,18 +379,43 @@ class element_list:
 
 # ===================================================================================================
 class html_element:
+    """
+    HTMLの単一の要素を表すクラス
+
+    element_listのインスタンスで単一の要素を取り出した場合、本クラスのインスタンスが返却される。
+    このクラスは１つの要素に対する属性、内容の取得、アンカーの一覧の取得などの機能を持つ。
+    
+    """
 
     def __init__(self, page, bs_element):
         self.page       = page
         self.bs_element = bs_element
 
-    def get_attr(self, attr):
+    def get_attr(self, attr) -> str:
+        """
+        この要素がもつ属性値を文字列として返却する。
+
+        Returns:
+            str:属性値
+        """
         return self.bs_element[attr]
 
-    def content(self):
+    def content(self) -> str:
+        """
+        この要素がもつ内容を文字列として返却する。
+
+        Returns:
+            str:要素の内容
+        """
         return self.bs_element.get_text()
 
-    def get_anchor(self):
+    def get_anchor(self) -> element_list:
+        """
+        この要素からアンカーを検索して、要素の一覧を表す単一のインスタンスを返却する。
+
+        Returns:
+            element_list:アンカー一覧
+        """
         anchor_bs_element_list = self.bs_element.find_all("a")
         return element_list(self.page, anchor_bs_element_list)
 
@@ -399,11 +424,24 @@ class html_element:
 
 # ===================================================================================================
 class anchor_html_element(html_element):
+    """
+    HTMLの単一のアンカー要素を表すクラス
 
+    element_listのインスタンスで単一の要素を取り出した場合、アンカーの要素だった場合、本クラスのインスタンスが返却される。
+    get_hrefで要素の「href」属性を取り出した場合、リンク先が相対パスであった場合、絶対パスへ補完されて返却される。
+    
+    """
     def __init__(self, page, bs_element):
         super().__init__(page, bs_element)
 
-    def get_href(self):
+    def get_href(self) -> str:
+        """
+        この要素がもつhrefの属性値を文字列として返却する。
+        なお、リンク先が相対パスであった場合、絶対パスへ補完されて返却される。
+
+        Returns:
+            str:要素の内容
+        """
         href = self.bs_element["href"]
         if href != "" :
             return urljoin(self.page.url, href)
@@ -474,16 +512,49 @@ class prawler_datastore_mysql(datastore_mysql):
 from logging import getLogger, FileHandler, StreamHandler, Formatter, DEBUG
 import json
 class msg:
+    """
+    ログに出力する際に使用するメッセージを表すクラス。
+
+    以下のように設定。
+    "connect success url=[{url}], status_code=[{status_code}]")
+            .param(url=url, status_code=req_inst.status_code)
+            .detail(
+                selector = selector,
+                element_list = [str(element) for element in element_list_result]),
+            )
+
+    それをそのまま出力（__str__を介して）すると以下のようJSON形式で出力される。
+    {"body": "connect success url=[http://aaa.con], status_code=[200]", "selector": ".pager", "element_list": ["a","table"]}
+    """
     def __init__(self, message ):
         self.message    = message
         self.param_dict = None
         self.detail_data = None
     
     def param(self, **param_dict):
+        """
+        メッセージ本文の埋め文字を設定する。
+
+        Examples:
+            .param(url=url, status_code=req_inst.status_code)
+        Args:
+            param_dict(dict):メッセージ本文の埋め文字
+        """
         self.param_dict = param_dict
         return self
     
     def detail(self, **detail_data):
+        """
+        このメッセージに付随する情報をディクショナリ形式で設定する。
+
+        Examples:
+            .detail(
+                selector = selector,
+                element_list = [str(element) for element in element_list_result]),
+            )
+        Args:
+            detail_data(dict):このメッセージに付随する情報
+        """
         self.detail_data = detail_data
         return self
     
@@ -502,9 +573,22 @@ class msg:
 
     
 class abstract_prawler_logger(metaclass=ABCMeta):
-
+    """
+        ロギングの抽象クラス
+    """
     @abstractmethod
-    def info(self, msg):
+    def info(self, msg:msg):
+        """
+        INFOレベルでのメッセージを出力する。
+
+        Examples:
+            .detail(
+                selector = selector,
+                element_list = [str(element) for element in element_list_result]),
+            )
+        Args:
+            detail_data(dict):このメッセージに付随する情報
+        """
         pass
 
     @abstractmethod
