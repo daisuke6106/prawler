@@ -142,7 +142,7 @@ class page:
         return "headers.txt"
      
     @staticmethod
-    def create_page_instance(url:str, header:dict, content:str, logger:prawler_logger)->page:
+    def create_page_instance(url:str, header:dict, content:str, logger:"prawler_logger")->"page":
         """ 引数に指定された情報をもとにページのインスタンスを生成する。
 
         クラスはヘッダに指定されている「content-type」をもとに決定される。
@@ -234,7 +234,7 @@ class html_page(page):
         """
         return self.soup.find("title").get_text()
 
-    def get_element(self, selector:str) -> element_list:
+    def get_element(self, selector:str) -> "element_list":
         """ 引数に指定された要素を取得し、返却する。
 
         参考:https://qiita.com/Chanmoro/items/db51658b073acddea4ac
@@ -284,7 +284,6 @@ class element_list:
 
     HTMLのページに対して、DOM操作を行い、要素の一覧を取得するような場合、このクラスの単一のインスタンスが返却される。
     このインスタンスはfor文で１要素ずつ取り出せることができる。
-
     """
     def __init__(self, page, bs_element_list):
         self.page = page
@@ -307,7 +306,7 @@ class element_list:
             content += element.content()
         return content
 
-    def get_anchor(self) -> element_list:
+    def get_anchor(self) -> "element_list":
         """
         このインスタンスが持つ要素からアンカーの一覧を抽出し、新たな要素一覧として返却する。
 
@@ -370,7 +369,7 @@ class element_list:
         self.__iterator_count = 0
         return self
     
-    def __next__(self) -> html_element:
+    def __next__(self) -> "html_element":
         if self.__iterator_count == len(self.element_list) :
             raise StopIteration()
         return_element = self.element_list[self.__iterator_count]
@@ -386,7 +385,6 @@ class html_element:
     このクラスは１つの要素に対する属性、内容の取得、アンカーの一覧の取得などの機能を持つ。
     
     """
-
     def __init__(self, page, bs_element):
         self.page       = page
         self.bs_element = bs_element
@@ -511,6 +509,9 @@ class prawler_datastore_mysql(datastore_mysql):
 # ===================================================================================================
 from logging import getLogger, FileHandler, StreamHandler, Formatter, DEBUG
 import json
+#####################################################################################################
+# 
+#####################################################################################################
 class msg:
     """
     ログに出力する際に使用するメッセージを表すクラス。
@@ -570,12 +571,15 @@ class msg:
             else:
                 return json.dumps({"body":self.message})
 
-
-    
 class abstract_prawler_logger(metaclass=ABCMeta):
     """
         ロギングの抽象クラス
     """
+
+    @abstractmethod
+    def debug(self, msg:msg):
+        pass
+
     @abstractmethod
     def info(self, msg:msg):
         """
@@ -589,6 +593,10 @@ class abstract_prawler_logger(metaclass=ABCMeta):
         Args:
             detail_data(dict):このメッセージに付随する情報
         """
+        pass
+
+    @abstractmethod
+    def warning(self, e):
         pass
 
     @abstractmethod
@@ -607,7 +615,13 @@ class prawler_logger_nonlog(abstract_prawler_logger):
             cls._instance = prawler_logger_nonlog()
         return cls._instance
 
+    def debug(self, msg):
+        pass
+
     def info(self, msg):
+        pass
+
+    def warning(self, e):
         pass
 
     def error(self, e):
@@ -649,9 +663,15 @@ class prawler_logger(abstract_prawler_logger):
         file_handler.setFormatter(self.fotmatter)
         self.logger.addHandler(file_handler)
 
+    def debug(self, msg):
+        self.logger.debug(str(msg))
+    
     def info(self, msg):
         self.logger.info(str(msg))
     
+    def warning(self, msg):
+        self.logger.warning(str(msg))
+
     def error(self, e):
         self.logger.error(e)
 
